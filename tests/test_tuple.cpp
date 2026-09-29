@@ -15,25 +15,9 @@
 #include <string>
 #include <vector>
 
-// operator<< para los enums de Types.h, que no tienen uno. CHECK_EQ imprime ambos
-// valores cuando fallan, asi que sin esto el harness no compila al primer CHECK_EQ de
-// un enum en vez de decir cual era el valor esperado.
-std::ostream& operator<<(std::ostream& os, Status s) {
-    switch (s) {
-        case Status::Ok:                 return os << "Ok";
-        case Status::PageFull:           return os << "PageFull";
-        case Status::TupleTooLarge:      return os << "TupleTooLarge";
-        case Status::NotFound:           return os << "NotFound";
-        case Status::Corrupt:            return os << "Corrupt";
-        case Status::NodeOverflow:       return os << "NodeOverflow";
-        case Status::PreconditionFailed: return os << "PreconditionFailed";
-    }
-    return os << "?Status";
-}
-
-std::ostream& operator<<(std::ostream& os, ValueKind k) {
-    return os << (k == ValueKind::Int ? "Int" : "VarChar");
-}
+// operator<< de Status y ValueKind vive en TestHarness.h, que lo trae inline. Estaba
+// originalmente en este archivo y test_storage.cpp lo necesita tambien: en dos .cpp
+// seria una definicion multiple en el link.
 
 namespace {
 

@@ -1,11 +1,36 @@
 // tests/TestHarness.h         [P1] macros TEST/CHECK/CHECK_EQ, sin dependencias y sin fork()
 #pragma once
 
+#include "common/Types.h"
+
 #include <cstdio>
 #include <cstdlib>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <vector>
+
+// operator<< de los enums de Types.h, que no traen uno. CHECK_EQ imprime ambos valores
+// cuando fallan, y sin esto el harness no compila al primer CHECK_EQ de un enum en vez de
+// decir cual era el valor esperado. inline y NO en un .cpp compartido: un operador de
+// este tipo en dos .cpp distintos seria una definicion multiple en el link.
+inline std::ostream& operator<<(std::ostream& os, Status s) {
+    switch (s) {
+        case Status::Ok:                 return os << "Ok";
+        case Status::PageFull:           return os << "PageFull";
+        case Status::TupleTooLarge:      return os << "TupleTooLarge";
+        case Status::NotFound:           return os << "NotFound";
+        case Status::Corrupt:            return os << "Corrupt";
+        case Status::NodeOverflow:       return os << "NodeOverflow";
+        case Status::PreconditionFailed: return os << "PreconditionFailed";
+    }
+    return os << "?Status";
+}
+
+inline std::ostream& operator<<(std::ostream& os, ValueKind k) {
+    return os << (k == ValueKind::Int ? "Int" : "VarChar");
+}
+
 
 // Sin EXPECT_ASSERT_FAILS ni fork(): los errores esperados se comparan con CHECK_EQ
 // sobre el Status, y los asserts que quedan son de error de programacion.
