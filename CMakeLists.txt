@@ -33,7 +33,8 @@ target_link_libraries(main PRIVATE phase1_core)
 add_executable(tests
   tests/test_main.cpp
   tests/test_value.cpp tests/test_tuple.cpp
-  tests/test_storage.cpp tests/test_tree_printer.cpp
+  tests/test_storage.cpp tests/test_datagen.cpp
+  tests/test_tree_printer.cpp
   tests/test_page_manager.cpp
   tests/test_btree_node.cpp tests/test_btree_write.cpp
   tests/test_btree_read.cpp tests/test_tree_invariants.cpp
@@ -46,6 +47,7 @@ target_include_directories(tests   PRIVATE tests)
 enable_testing()
 add_test(NAME value         COMMAND tests --suite value)
 add_test(NAME tuple         COMMAND tests --suite tuple)
+add_test(NAME datagen       COMMAND tests --suite datagen)
 add_test(NAME storage       COMMAND tests --suite storage)
 add_test(NAME tree_printer  COMMAND tests --suite tree_printer)
 add_test(NAME page_manager  COMMAND tests --suite page_manager)
