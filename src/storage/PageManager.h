@@ -29,5 +29,13 @@ public:
     uint64_t pageWrites() const;
     size_t   pageSize() const;
     uint32_t pageCount() const;
-    void     resetCounters();
+    void     resetCounters() const;
+
+private:
+    std::string path_;
+    size_t page_size_ = 0;
+    uint32_t page_count_ = 0;
+    FileMeta meta_{};
+    mutable uint64_t page_reads_ = 0;
+    mutable uint64_t page_writes_ = 0;
 };
