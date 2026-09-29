@@ -8,17 +8,15 @@ lo que importa son dos cosas: (a) que las decisiones de diseño estén cerradas 
 programe contra una suposición distinta, y (b) que exista un **orden de recorte** explícito
 para saber qué se suelta primero si el tiempo falta. Ver §5.
 
-## Cambios respecto a `open_v3.md`
+## Registro de cambios
 
-La tabla completa de los **41** cambios, con su motivo, y los **efectos colaterales de la
-reversión** (cambio 6) están en el anexo **`open_v4_revision2.md`**, que tiene 41 filas y va de la
-1 a la 41 (las 39, 40 y 41 son las correcciones del punto de cruce, de los asserts y de la
-reutilización). Aquí solo lo que cambia
-el cuerpo del plan, para no tener 41 filas de historial delante de las decisiones:
+Este documento se corrige a sí mismo: cada cambio que altera el cuerpo del plan queda numerado y
+anotado abajo, con su motivo y en qué sección vive. Los últimos son las correcciones del punto de
+cruce (39), de los asserts (40), de la reutilización de una región mayor con una tupla menor (41) y
+la firma de `Benchmark` (42). Un cambio que solo toca la redacción no se anota.
 
 | # | Cambio | Dónde vive en este plan |
 |---|---|---|
-| 1–38 | Ver el anexo `open_v4_revision2.md` (filas 1 a 38, todas con su motivo) | — |
 | 34 | `SlottedPage::erase` entra en la Fase 1 y sale del orden de recorte | §1 (decisión de borrado), §5 (orden de recorte), §6 (alcance #9), §10 (riesgo 15) |
 | 35 | Cada curva del benchmark corre 6 valores de `N` desde 20, y se declara el punto de cruce | §1 (las dos curvas juntas), §6 (cómo se lee), §10 (riesgo 24) |
 | 36 | `Benchmark.{h,cpp}` pasa a P2; P4 conserva la presentación | §2, §3, §3.1, §4, §6, §9, §11 |
@@ -27,6 +25,7 @@ el cuerpo del plan, para no tener 41 filas de historial delante de las decisione
 | 39 | **El punto de cruce lo calcula el programa** (`Benchmark::crossover`) y se corrigen los valores: 263 a 4096 B, y 17 / 24 / 25 a 256 B | §1 (tabla del cruce, fila de P2), §6 (salida y "cómo se lee esto"), §8 (checklist), §10 (riesgo 24) |
 | 40 | **Las precondiciones testeadas devuelven `Status::PreconditionFailed`**, no `assert`: tupla de 0 campos y las dos de `bulkLoad` | §1 (contrato de `bulkLoad`), §3 (tests de P1 y P4), §4 (`Status`, `Tuple`, `BTree`, `HeapFile`), §7 (reglas 20 y 21), §8 (checklist), §10 (riesgo 23) |
 | 41 | **Reutilizar una región mayor con una tupla menor**: el `length` no baja, `lookup` devuelve la cola y `deserialize` la ignora | §1 (cadena de libres, decisión de borrado), §3 (tests de P1), §4 (`SlottedPage`, `Tuple`), §8 (checklist), §10 (riesgo 15) |
+| 42 | **`Benchmark` tiene firma en el contrato**: `BenchmarkOptions`, `Band`, `run` y `crossover`, con `crossover` devolviendo las bandas del cruce y no tres campos sueltos | §4 (`Benchmark.h`), §7 (regla 19), §8 (checklist) |
 
 ---
 
@@ -1001,6 +1000,42 @@ public:
     double   elapsedMs() const;           // std::chrono::steady_clock
 };
 
+// bench/Benchmark.h                       [P2]
+// Las DOS curvas (4096 y luego 256) sobre base temporal propia, con reset entre
+// curvas. Es lo UNICO que mide: main.cpp (P4) solo lo invoca y lo presenta.
+// Benchmark NO lee argv: --page-size / --n / --full los parsea el menu (P4) y
+// llegan en BenchmarkOptions. main.cpp no inventa ni un valor de medicion.
+struct BenchmarkOptions {
+    size_t page_size = 0;     // 0 = las dos curvas (4096 y 256); otro = esa sola
+    size_t n         = 0;     // 0 = los 6 N canonicos (20, 500, 1e3, 5e3, 1e4, 1e5)
+                              //     > 0 = una sola corrida, en LAS DOS curvas, para depurar
+    bool   full      = false; // en vivo salen las 12 filas sin el tiempo de N = 100 000
+                              // (el punto caro del riesgo 25); --full lo agrega, y con el
+                              // las 12 filas salen con R repeticiones, que es la tabla de
+                              // docs/benchmark-results.md
+    size_t repeats   = 0;     // 0 = el protocolo de R: 5 hasta N = 1e4, 1 en N = 1e5
+};
+// Una banda contigua de N en la que gana lo mismo. La isla de empate de N = 24 a
+// 256 B es una banda PROPIA, por eso esto es una lista y no tres campos sueltos.
+struct Band { size_t from, to; enum class Winner { Scan, Tie, Index }; };
+class Benchmark {
+public:
+    // Imprime el bloque de la opcion 6: 27 B/tupla y tuplas/pagina, las dos curvas
+    // con altura y ratio, las paginas del archivo con ceil(N/tuplasPorPagina)+1, el
+    // punto de cruce de cada curva y el tiempo de construccion del indice por
+    // separado del tiempo de busqueda. El tiempo de construccion NO entra en el
+    // tiempo de busqueda; R solo afecta al tiempo, nunca a los recuentos.
+    // Status: bulkLoad exige arbol vacio y aca se construye una base nueva por
+    // curva, asi que un PreconditionFailed es un bug de esta base, no del dato.
+    static Status run(std::ostream& out, const BenchmarkOptions& opt = {});
+    // Recorre N = 1..100000 y clasifica cada valor en escaneo | empate | indice.
+    // NO esta escrito a mano: si cambian computeT o la formula de altura, el cruce
+    // cambia con ellas. No construye ningun arbol: es aritmetica sobre
+    // BTreeNode::computeT(page_size), y por eso no depende de P3 para correr.
+    // El tope de 100000 esta justificado en §1.
+    static std::vector<Band> crossover(size_t page_size, size_t tuples_per_page);
+};
+
 // bench/DataGen.h                         [P1]
 // Dataset del benchmark: 2 campos, INT key + VARCHAR name de 16 bytes -> tupla de 27 B.
 // sorted() es la unica que puede darle la entrada a bulkLoad (ordenada no decreciente).
@@ -1369,7 +1404,9 @@ Ninguna está prohibida ni exigida por `Trab1.md`; se enuncian para que no parez
     - Los **cuerpos** de `BTreeNode`, `BTree`, `PageManager` y `SlottedPage` se pueden cambiar
       cuando quiera su dueño; son implementación.
     - Las **firmas** de §4 (`NodeData` como struct, `serialize`/`deserialize`, `fromData`,
-      `data()`, `search`, `indexScan`, `bulkLoad`) y el **layout de 16 B** solo se cambian con un
+      `data()`, `search`, `indexScan`, `bulkLoad`, y también `Benchmark::run` y
+      `Benchmark::crossover`, que P4 invoca desde `main.cpp` y no puede acomodar por su cuenta)
+      y el **layout de 16 B** solo se cambian con un
       Issue de las cuatro personas, antes de que arranque el trabajo de los demás.
     - Mientras tanto, si un cambio de firma es inevitable, se hace **agregando** (un campo nuevo al
       final de `NodeData` con valor por defecto, un parámetro con valor por defecto), nunca
@@ -1407,7 +1444,7 @@ Ninguna está prohibida ni exigida por `Trab1.md`; se enuncian para que no parez
 - [ ] `TestHarness.h` y `test_main.cpp` (P1) con `TEST`/`CHECK`/`CHECK_EQ` y el despacho por `--suite`. **Sin `fork` y sin `EXPECT_ASSERT_FAILS`**: una precondición que un test tiene que comprobar devuelve `Status` (regla 21), porque `fork` en `ctest` es portable solo a medias y en macOS se comporta distinto
 - [ ] `Status` incluye `PreconditionFailed` y las tres precondiciones testeadas lo devuelven sin assert: `Tuple::serializeTo` con 0 campos, `bulkLoad` sobre árbol no vacío y `bulkLoad` con entrada desordenada
 - [ ] `Tuple::serializeTo` devuelve `Status` (no `void`) y `HeapFile::insert` lo propaga; ningún test depende de que un `assert` dispare
-- [ ] Los headers con stubs compilables (`SlottedPage`, `PageManager`, `HeapFile`, `BTreeNode` con `NodeData` y `t`, `BTree`, `Metrics`, `TreePrinter`, `TreeInvariants`) en la rama `contract`
+- [ ] Los headers con stubs compilables (`SlottedPage`, `PageManager`, `HeapFile`, `BTreeNode` con `NodeData` y `t`, `BTree`, `Metrics`, **`Benchmark`**, `TreePrinter`, `TreeInvariants`) en la rama `contract`
 - [ ] **`NodeData`, el header de 16 B y las firmas de §4 congelados** (regla 19): `static_assert` de tamaño y `offsetof` en `BTreeNode.h`, la sección de contrato en el test `btree_node`, y el Issue de las cuatro personas abierto antes de empezar
 - [ ] `main.cpp` (P4) con las 6 opciones de menú apuntando a stubs y el reparto de archivos de §1 bis
 - [ ] `CMakeLists.txt` (P4) congelado, con fuentes explícitas, `Debug` por defecto, `-Wall -Wextra`, un `add_test` por suite y `tests/` en la raíz
