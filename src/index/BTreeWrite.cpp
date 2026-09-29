@@ -4,14 +4,16 @@
 // en BTreeRead.cpp y reutiliza writeNode()/readNode() declarados en BTree.h.
 //
 // Orden de implementacion de la rama btree-node (un commit por fase):
-//   1. open / readNode / writeNode / rootPageID / height / pages / setVerbose
-//   2. findLeaf con la politica de duplicados y insert dentro de una hoja
-//   3. split + propagacion hasta la raiz, con logSplit / logHeight
+//   1. open / readNode / writeNode / rootPageID / height / pages / setVerbose  [listo]
+//   2. findLeaf con la politica de duplicados, insert y propagacion del split   [listo]
+//   3. logSplit / logHeight bajo verbose_
 
 #include "index/BTree.h"
 
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 Status BTree::open(PageManager& index_pm, BTree& out) {
     // Se abre "en su sitio": si algo falla, out queda como estaba (se restaura el puntero),
@@ -95,5 +97,104 @@ Status BTree::writeNode(const BTreeNode& node) const {
     const Status s = node.serialize(page);              // NodeOverflow si > 2t-1, sin abortar
     if (s != Status::Ok) return s;
     pm_->write(node.data().self, page);
+    return Status::Ok;
+}
+
+PageID BTree::findLeaf(int32_t key, Bias bias,
+                       std::vector<PageID>* ancestors) const {
+    // Baja de la raiz a la hoja guardando la ruta (raiz -> hoja). Los duplicados deciden
+    // hacia que hijo se baja:
+    //   Bias::Left  (search, P4) -> lowerBound: a la IZQUIERDA de la primera separadora
+    //                               >= key, o sea la hoja mas a la izquierda que puede
+    //                               contener la clave. Desde ahi search recorre nextLeaf.
+    //   Bias::Right (insert)     -> upperBound: a la DERECHA de las separadoras <= key,
+    //                               o sea la ultima hoja que puede contener la clave. Asi
+    //                               las copias de una clave se acumulan juntas y no
+    //                               quedan repartidas al reves de como se busca.
+    if (ancestors != nullptr) ancestors->clear();
+
+    PageID current = rootPageID();
+    while (true) {
+        const BTreeNode node = readNode(current);
+        if (node.isLeaf()) return current;
+
+        // Hoja interna sin hijos no puede existir: deserialize la permite (keyCount 0),
+        // pero bajar por ella seria un childAt() fuera de rango, no un Status.
+        if (node.childCount() == 0) {
+            throw std::runtime_error("BTree::findLeaf: nodo interno sin hijos en pagina " +
+                                     std::to_string(current));
+        }
+        if (ancestors != nullptr) ancestors->push_back(current);
+
+        // idx queda siempre en [0, keyCount] = [0, childCount-1], para ambos bias.
+        const uint16_t idx = (bias == Bias::Left) ? node.searchInNode(key).idx
+                                                  : node.upperBound(key);
+        current = node.childAt(idx);
+    }
+}
+
+Status BTree::insert(int32_t key, const RowID& rowid) {
+    if (pm_ == nullptr) return Status::PreconditionFailed;  // sin open() no hay arbol
+
+    std::vector<PageID> ancestors;
+    const PageID leaf_id = findLeaf(key, Bias::Right, &ancestors);
+    BTreeNode node = readNode(leaf_id);
+    node.insertInNode(key, rowid);
+
+    // En memoria entra hasta 2t claves a proposito (insertInNode no corta): el serializador
+    // es quien corta en 2t-1 con NodeOverflow. El split pasa ANTES de escribir, asi que
+    // una pagina desbordada nunca llega a disco ni en Release.
+    if (node.keyCount() <= 2 * node.t() - 1) return writeNode(node);
+
+    PageID left_id = leaf_id;
+    SplitResult split = node.split(pm_->allocate());   // split es puro: solo reparte claves
+    Status s = writeNode(node);                        // izquierdo (ya con nextLeaf nuevo)
+    if (s != Status::Ok) return s;
+    s = writeNode(split.right);                        // right.self ya esta grabado por split
+    if (s != Status::Ok) return s;
+    // logSplit(node, split.right, split.promoted_key);   // [P3, fase 3]
+
+    int32_t promoted = split.promoted_key;
+    PageID right_page = split.right.data().self;
+
+    // Sube por la pila de ancestros (de la hoja hacia la raiz) hasta que alguno quepa.
+    // El bucle, no la recursion: es la misma altura que el arbol, que es log(n).
+    for (auto it = ancestors.rbegin(); it != ancestors.rend(); ++it) {
+        BTreeNode parent = readNode(*it);
+        parent.insertInNode(promoted, right_page);
+        if (parent.keyCount() <= 2 * parent.t() - 1) return writeNode(parent);
+
+        left_id = parent.data().self;
+        split = parent.split(pm_->allocate());         // interno: la clave SUBE, no queda
+        s = writeNode(parent);
+        if (s != Status::Ok) return s;
+        s = writeNode(split.right);
+        if (s != Status::Ok) return s;
+        // logSplit(parent, split.right, split.promoted_key);  // [P3, fase 3]
+        promoted = split.promoted_key;
+        right_page = split.right.data().self;
+    }
+
+    // Se llego al tope de la pila: hace falta una raiz nueva (hoja que partido, o interno
+    // que partido). Es el UNICO punto donde crece la altura del arbol.
+    const PageID new_root_id = pm_->allocate();
+    NodeData data;
+    data.is_leaf = false;
+    data.t = BTreeNode::computeT(pm_->pageSize());
+    data.self = new_root_id;
+    data.next_leaf = 0;
+    data.keys.push_back(promoted);
+    data.children.push_back(left_id);
+    data.children.push_back(right_page);
+    const BTreeNode new_root = BTreeNode::fromData(std::move(data), pm_->pageSize());
+    s = writeNode(new_root);
+    if (s != Status::Ok) return s;
+
+    FileMeta meta = pm_->readMeta();                   // conserve record_count y page_count
+    const size_t old_height = meta.height;
+    meta.root_page_id = new_root_id;
+    meta.height = old_height + 1;
+    pm_->writeMeta(meta);
+    // logHeight(old_height, meta.height, new_root_id);  // [P3, fase 3]
     return Status::Ok;
 }
