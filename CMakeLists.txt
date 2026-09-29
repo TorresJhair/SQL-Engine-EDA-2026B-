@@ -14,7 +14,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra)     # "listo" exige compilar sin warnings nuevos
 
-add_executable(main src/main.cpp
+# La implementacion vive en una libreria estatica y los dos ejecutables la linkean. Sin esto
+# el target tests no tendria los .cpp de src/ y ningun test podria llamar a nada: se
+# linkearia contra las DECLARACIONES de los headers y fallaria con "undefined reference".
+# src/main.cpp queda AFUERA de la libreria porque trae su propio main().
+add_library(phase1_core STATIC
   src/storage/Value.cpp  src/storage/Tuple.cpp      src/storage/SlottedPage.cpp
   src/storage/PageManager.cpp src/storage/HeapFile.cpp
   src/index/BTreeNode.cpp src/index/BTreeWrite.cpp src/index/BTreeRead.cpp
@@ -23,18 +27,25 @@ add_executable(main src/main.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
+add_executable(main src/main.cpp)
+target_link_libraries(main PRIVATE phase1_core)
+
 add_executable(tests
   tests/test_main.cpp
+  tests/test_value.cpp tests/test_tuple.cpp
   tests/test_storage.cpp tests/test_tree_printer.cpp
   tests/test_page_manager.cpp
   tests/test_btree_node.cpp tests/test_btree_write.cpp
   tests/test_btree_read.cpp tests/test_tree_invariants.cpp
 )
 # OJO: tests/ esta en la raiz, no en src/. Ver el arbol de arriba.
+target_link_libraries(tests PRIVATE phase1_core)
 
-target_include_directories(main  PRIVATE src)
-target_include_directories(tests PRIVATE src tests)
+target_include_directories(phase1_core PUBLIC src)
+target_include_directories(tests   PRIVATE tests)
 enable_testing()
+add_test(NAME value         COMMAND tests --suite value)
+add_test(NAME tuple         COMMAND tests --suite tuple)
 add_test(NAME storage       COMMAND tests --suite storage)
 add_test(NAME tree_printer  COMMAND tests --suite tree_printer)
 add_test(NAME page_manager  COMMAND tests --suite page_manager)

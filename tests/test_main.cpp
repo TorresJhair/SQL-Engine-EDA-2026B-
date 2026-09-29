@@ -10,6 +10,8 @@
 
 // Cabeceras de las 7 suites: cada una tiene sus test_*.cpp.
 namespace suites {
+void value();          // [P1]
+void tuple();          // [P1]
 void storage();        // [P1]
 void tree_printer();   // [P1]
 void page_manager();   // [P2]
@@ -45,6 +47,8 @@ struct SuiteName {
 };
 
 const SuiteName kSuites[] = {
+    {"value",        &suites::value},
+    {"tuple",        &suites::tuple},
     {"storage",      &suites::storage},
     {"tree_printer", &suites::tree_printer},
     {"page_manager", &suites::page_manager},
@@ -65,6 +69,8 @@ void usage(const char* argv0) {
 
 int main(int argc, char** argv) {
     // Llamar a las 7 suiteRegistration() engancha sus TEST al registro global.
+    suites::value();
+    suites::tuple();
     suites::storage();
     suites::tree_printer();
     suites::page_manager();
