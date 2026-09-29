@@ -3,10 +3,6 @@
 Heap de páginas con *slotted page* y un índice B+ tree sobre él. El árbol es de
 altura mínima alcanzable y sus nodos caben enteros en una página de 4096 B.
 
-> **Estado del repo.** Este README se escribe en la rama `contract`, que es la base común
-> que comparten las cuatro personas del equipo. Las secciones 5 y 6 se completan a medida
-> que cada dueño entregue su módulo.
-
 ## 1. Entorno y dependencias
 
 | | |
@@ -51,15 +47,16 @@ El menú de 6 opciones es de P4. Cuando esté escrito va a entender `--demo 0|1|
 ## 3. Correr los tests
 
 ```bash
-ctest --test-dir build --output-on-failure     # las 7 suites
+ctest --test-dir build --output-on-failure     # las 10 suites
 ctest --test-dir build -R storage              # una sola
 ./build/tests --suite storage                  # igual, sin ctest
 ./build/tests                                  # todas ("all" si no se pasa --suite)
 ```
 
 Hay un `add_test` por suite, así que una suite roja se ve sola en el informe en vez de
-desaparecer dentro de un "los tests fallan". Las siete son `storage`, `tree_printer`,
-`page_manager`, `btree_node`, `btree_write`, `btree_read` e `invariants`.
+desaparecer dentro de un "los tests fallan". Las diez son `value`, `tuple`, `datagen`,
+`storage`, `tree_printer`, `page_manager`, `btree_node`, `btree_write`, `btree_read` e
+`invariants`.
 
 Dos reglas del harness que no son arbitrarias:
 
