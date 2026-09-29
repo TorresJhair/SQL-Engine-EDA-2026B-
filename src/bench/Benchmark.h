@@ -24,7 +24,11 @@ struct BenchmarkOptions {
 
 // Una banda contigua de N en la que gana lo mismo. La isla de empate de N = 24 a
 // 256 B es una banda PROPIA, por eso esto es una lista y no tres campos sueltos.
-struct Band { size_t from, to; enum class Winner { Scan, Tie, Index }; };
+struct Band {
+    size_t from, to;
+    enum class Winner { Scan, Tie, Index };
+    Winner winner;
+};
 
 class Benchmark {
 public:

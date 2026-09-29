@@ -5,6 +5,7 @@
 #include "storage/PageManager.h"
 
 #include <cstdint>
+#include <chrono>
 
 // Agrega los dos PageManager y el reloj. Lo usa Benchmark (P2), que es suyo.
 class Metrics {
@@ -18,4 +19,9 @@ public:
     void   resetCounts();
     void   start();
     double elapsedMs() const;           // std::chrono::steady_clock
+
+private:
+    const PageManager& heap_pm_;
+    const PageManager& index_pm_;
+    std::chrono::steady_clock::time_point started_{};
 };

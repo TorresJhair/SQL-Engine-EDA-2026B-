@@ -2,9 +2,11 @@
 #pragma once
 
 #include "common/Types.h"
+#include "storage/PageManager.h"
 #include "storage/Tuple.h"
 
 #include <cstdint>
+#include <vector>
 
 // CURSOR: insert solo mira lastInsertPageID_. Si no cabe, allocate() y avanza.
 // Nunca reexamina paginas anteriores -> O(1) amortizado.
@@ -17,6 +19,7 @@ public:
     // tiene 0 campos (viene de Tuple::serializeTo, que ya devuelve Status).
     Status insert(const Tuple&, RowID& out);
     Status get(const RowID&, Tuple& out);
+    void flush();                                  // persiste record_count en FileMeta
 
     class Scan {                               // Full Table Scan: recorre TODAS las paginas,
     public:                                    // deserializa cada tupla. La clave es el
@@ -24,6 +27,15 @@ public:
         Scan();
         bool next(Tuple& out, RowID& rid);     // NO se detiene en la primera coincidencia.
         void reset();
+
+    private:
+        friend class HeapFile;
+        explicit Scan(PageManager*);
+        PageManager* pm_ = nullptr;
+        PageID page_id_ = 1;
+        SlotID slot_id_ = 0;
+        Page current_page_;
+        bool page_loaded_ = false;
     };
 
     Scan   scan();
@@ -31,7 +43,9 @@ public:
     size_t recordCount() const;
 
 private:
+    PageManager& pm_;
     PageID lastInsertPageID_ = 0;               // el cursor
+    uint64_t record_count_ = 0;
 };
 
 // Las tuplas por pagina NO son constante: size_t tuplesPerPage(size_t page_size);
