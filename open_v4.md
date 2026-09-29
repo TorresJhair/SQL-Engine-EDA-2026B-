@@ -12,8 +12,9 @@ para saber qué se suelta primero si el tiempo falta. Ver §5.
 
 Este documento se corrige a sí mismo: cada cambio que altera el cuerpo del plan queda numerado y
 anotado abajo, con su motivo y en qué sección vive. Los últimos son las correcciones del punto de
-cruce (39), de los asserts (40), de la reutilización de una región mayor con una tupla menor (41) y
-la firma de `Benchmark` (42). Un cambio que solo toca la redacción no se anota.
+cruce (39), de los asserts (40), de la reutilización de una región mayor con una tupla menor (41),
+la firma de `Benchmark` (42) y la cadena de libres por índices de slot (43). Un cambio que solo
+toca la redacción no se anota.
 
 | # | Cambio | Dónde vive en este plan |
 |---|---|---|
@@ -26,6 +27,7 @@ la firma de `Benchmark` (42). Un cambio que solo toca la redacción no se anota.
 | 40 | **Las precondiciones testeadas devuelven `Status::PreconditionFailed`**, no `assert`: tupla de 0 campos y las dos de `bulkLoad` | §1 (contrato de `bulkLoad`), §3 (tests de P1 y P4), §4 (`Status`, `Tuple`, `BTree`, `HeapFile`), §7 (reglas 20 y 21), §8 (checklist), §10 (riesgo 23) |
 | 41 | **Reutilizar una región mayor con una tupla menor**: el `length` no baja, `lookup` devuelve la cola y `deserialize` la ignora | §1 (cadena de libres, decisión de borrado), §3 (tests de P1), §4 (`SlottedPage`, `Tuple`), §8 (checklist), §10 (riesgo 15) |
 | 42 | **`Benchmark` tiene firma en el contrato**: `BenchmarkOptions`, `Band`, `run` y `crossover`, con `crossover` devolviendo las bandas del cruce y no tres campos sueltos | §4 (`Benchmark.h`), §7 (regla 19), §8 (checklist) |
+| 43 | **La cadena de libres guarda índices de directorio, no offsets**: los dos punteros son `slotID` y `0xFFFF` sigue siendo el fin | §1 (cadena de libres), §4 (`SlottedPage`), §8 (checklist) |
 
 ---
 
@@ -81,11 +83,11 @@ tag 0 = INT    -> len = 4, int32_t con signo
 tag 1 = VARCHAR -> len = longitud arbitraria, sin terminador
 ```
 
-**Regla de la tupla mínima: `nFields >= 1`** (assert en `Tuple::serializeTo`). No es un capricho de
-estilo: una tupla sin campos mediría **1 B**, y el puntero de la cadena de libres necesita **2 B**
-dentro de la región liberada (ver abajo). Con al menos un campo, la tupla más pequeña posible es
-**4 B** —`[nFields:1]` + un `VARCHAR` vacío de `tag+len` = 3—, y siempre hay lugar para el puntero.
-Por eso existe el test de `VARCHAR` vacío: fija ese 4 B.
+**Regla de la tupla mínima: `nFields >= 1`** (devuelve `Status::PreconditionFailed`, no assert:
+cambio 40). No es un capricho de estilo: una tupla sin campos mediría **1 B**, y el puntero de la
+cadena de libres necesita **2 B** dentro de la región liberada (ver abajo). Con al menos un campo,
+la tupla más pequeña posible es **4 B** —`[nFields:1]` + un `VARCHAR` vacío de `tag+len` = 3—, y
+siempre hay lugar para el puntero. Por eso existe el test de `VARCHAR` vacío: fija ese 4 B.
 
 **Página de datos (slotted page):**
 
@@ -95,7 +97,7 @@ offset 8:  directorio de slots, 4 B por entrada, en orden de inserción:
              [offset: u16][length: u16]
            un slot libre conserva su length original; la cadena de libres
            avanza por los 2 primeros bytes de la region liberada:
-             [offset de la siguiente region libre: u16]   (0xFFFF = fin de cadena)
+             [indice de directorio de la siguiente region libre: u16]   (0xFFFF = fin de cadena)
 datos:     desde dataEnd (inclusive) hasta el final de la pagina
 ```
 
@@ -106,8 +108,8 @@ deserializar se valida que `dataStart == 8 + 4 * nSlots`; si no, `Status::Corrup
 Los bytes de cada tupla se escriben **hacia atrás desde el final de la página**, así que
 `dataEnd` solo baja. Consecuencias que hacen el diseño simple y sin sorpresas:
 
-- `erase(slot)` **enlaza la región liberada** en la cadena de libres: copia el offset de la
-  región siguiente en los 2 primeros bytes de la región liberada y actualiza `freeHead`.
+- `erase(slot)` **enlaza la región liberada** en la cadena de libres: copia el índice de directorio
+  de la región siguiente en los 2 primeros bytes de la región liberada y actualiza `freeHead`.
   **No compacta**: no mueve un solo byte de los datos, y el `length` original se queda en el
   directorio, que es lo que permite saber cuánto espacio hay y cuánto mide.
 - `insert` recorre la cadena de libres y reutiliza la **primera región cuyo `length` original
@@ -130,8 +132,9 @@ Los bytes de cada tupla se escriben **hacia atrás desde el final de la página*
     mueven bytes. Y `freeSpace()` **no sobredeclara**: los 23 B no se suman justamente porque no
     sirven para nada, ya que están dentro de una región ocupada.
 - **El orden al reutilizar importa:** se **desenlaza la región de la cadena primero** y se escribe
-  después. Los 2 primeros bytes de la región liberada guardan el offset de la siguiente, y la tupla
-  nueva los pisa; si se escribiera antes de desenlazar, se perdería el resto de la cadena.
+  después. Los 2 primeros bytes de la región liberada guardan el índice de directorio de la
+  siguiente, y la tupla nueva los pisa; si se escribiera antes de desenlazar, se perdería el resto
+  de la cadena.
 - `freeSpace()` = `(dataEnd - dataStart)` **+ Σ `length` de los slots libres del directorio**: el
   espacio total del que se puede escribir, contando lo reutilizable.
 - **El `+4` que casi nadie se acuerda de sumar:** escribir al final también cuesta la **entrada de
@@ -598,9 +601,10 @@ cmake_minimum_required(VERSION 3.16)
 project(phase1_btree)
 
 # Debug por defecto al desarrollar: mantiene vivos los assert de error de programacion
-# (asInt() sobre un VARCHAR, Tuple sin campos, bytes.size() < 2). El desborde de un nodo
-# NO depende del build: serialize() devuelve Status::NodeOverflow, asi que tambien se
-# detecta con -DNDEBUG. Por eso el benchmark se puede (y se debe) medir en RelWithDebInfo.
+# (asInt() sobre un VARCHAR, bytes.size() < 2). La tupla de 0 campos NO entra en la lista:
+# devuelve Status::PreconditionFailed y se testea sin fork (cambio 40). El desborde de un nodo
+# tampoco depende del build: serialize() devuelve Status::NodeOverflow, asi que se detecta con
+# -DNDEBUG. Por eso el benchmark se puede (y se debe) medir en RelWithDebInfo.
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
 endif()
@@ -802,8 +806,10 @@ public:
 // de 4 B por slot ([offset:u16][length:u16]) + datos hacia atras desde el final.
 // dataStart = fin del directorio = 8 + 4*nSlots; dataEnd = direccion mas baja ocupada.
 // Slot LIBRE: el directorio conserva su length, y los 2 primeros bytes de la region
-// liberada guardan el offset de la siguiente region libre (0xFFFF = fin de cadena).
-// freeHead = indice de directorio del primer libre.
+// liberada guardan el indice de directorio de la siguiente region libre (0xFFFF = fin de cadena).
+// freeHead = indice de directorio del primer libre. Los dos punteros de la cadena son slotID y no
+// offsets (cambio 43), igual que freeHead: asi el first-fit de insert la recorre en O(k) en vez de
+// O(k*k) resolviendo offset -> slot en cada paso.
 class SlottedPage {
 public:
     static SlottedPage init(size_t page_size);
@@ -1457,6 +1463,7 @@ Ninguna está prohibida ni exigida por `Trab1.md`; se enuncian para que no parez
 - [ ] Test de que caben 131 tuplas en una página de 4096 (y la 132 da `PageFull`), y 8 en una de 256 (y la 9)
 - [ ] `HeapFile` con cursor: test de que 1 000 inserts dan 9 páginas y 1 000 escrituras, no 9 000
 - [ ] `erase` sin compactar: test de que no mueve un byte de los datos de los demás slots, de que el slot se reutiliza, y de que `freeSpace` **crece** al borrar y el `insert` posterior no baja `dataEnd`
+- [ ] **Cadena de libres por índices de slot** (cambio 43): `freeHead` y el puntero dentro de la región liberada son ambos `slotID`, con `0xFFFF` de fin — test de que al liberar **dos** slots y reutilizar solo el primero, el segundo **sigue en la cadena** (su `length` se sigue sumando en `freeSpace`) y se puede reutilizar después; y test de que una página llena de 27 B deja la cadena vacía con `freeHead == 0xFFFF`
 - [ ] **Reutilización con sobrante** (cambio 41): test de que `erase` de 27 B seguido de `insert` de 4 B reutiliza la región entera, que `lookup` devuelve los 27 B, que `Tuple::deserialize` da la tupla de 1 campo con `Ok` **ignorando la cola**, y que **`freeSpace()` baja los 27 del `length` completo y no los 4 de la tupla** —con las 131 tuplas del caso de arriba: **27 → 54 → 27**— y que un segundo `erase` + `insert` de 27 B recupera la región entera
 - [ ] `split(rightPageID)` puro: test que confirma que no toca ningún archivo y que graba `right.self`
 - [ ] `deserialize` devuelve `Status::Corrupt` con `t`, `keyCount` o un offset alterado, y con una página de tuplas del heap pasada por nodo
