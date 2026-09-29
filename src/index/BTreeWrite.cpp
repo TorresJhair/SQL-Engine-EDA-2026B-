@@ -6,22 +6,27 @@
 // Orden de implementacion de la rama btree-node (un commit por fase):
 //   1. open / readNode / writeNode / rootPageID / height / pages / setVerbose  [listo]
 //   2. findLeaf con la politica de duplicados, insert y propagacion del split   [listo]
-//   3. logSplit / logHeight bajo verbose_
+//   3. logSplit / logHeight bajo verbose_                                      [listo]
+//
+// El formato exacto de estas dos lineas lo documenta docs/btree-insert.md [P3]: si cambia,
+// cambia ahi y en estos dos lugares, en ese orden.
 
 #include "index/BTree.h"
 
+#include <iomanip>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 Status BTree::open(PageManager& index_pm, BTree& out) {
-    // Se abre "en su sitio": si algo falla, out queda como estaba (se restaura el puntero),
-    // asi un out ya abierto no pierde su arbol por intentar abrir uno roto.
+    // Se abre "en su sitio": si algo falla, out queda como estaba (se restaura el
+    // puntero), asi un out ya abierto no pierde su arbol por intentar abrir uno roto.
+    // verbose_ NO se toca: es una preferencia de presentacion, no estado del arbol, y
+    // setVerbose() llamado antes de open() tiene que seguir valiendo.
     PageManager* const previous_pm = out.pm_;
-    const bool previous_verbose = out.verbose_;
     out.pm_ = &index_pm;
-    out.verbose_ = false;
 
     const FileMeta meta = index_pm.readMeta();
 
@@ -30,7 +35,6 @@ Status BTree::open(PageManager& index_pm, BTree& out) {
         // arbol queda sin abrir: no se escribe nada en el camino de falla.
         if (meta.height == 0) {                          // raiz sin altura: meta inconsistente
             out.pm_ = previous_pm;
-            out.verbose_ = previous_verbose;
             return Status::Corrupt;
         }
         BTreeNode root;
@@ -38,7 +42,6 @@ Status BTree::open(PageManager& index_pm, BTree& out) {
             BTreeNode::deserialize(index_pm.read(meta.root_page_id), root);
         if (s != Status::Ok || root.data().self != meta.root_page_id) {
             out.pm_ = previous_pm;
-            out.verbose_ = previous_verbose;
             return s != Status::Ok ? s : Status::Corrupt;
         }
         return Status::Ok;
@@ -52,7 +55,6 @@ Status BTree::open(PageManager& index_pm, BTree& out) {
     const Status s = out.writeNode(root);               // out.pm_ ya apunta al index_pm
     if (s != Status::Ok) {                              // hoja vacia: no puede fallar
         out.pm_ = previous_pm;
-        out.verbose_ = previous_verbose;
         return s;
     }
 
@@ -152,7 +154,7 @@ Status BTree::insert(int32_t key, const RowID& rowid) {
     if (s != Status::Ok) return s;
     s = writeNode(split.right);                        // right.self ya esta grabado por split
     if (s != Status::Ok) return s;
-    // logSplit(node, split.right, split.promoted_key);   // [P3, fase 3]
+    logSplit(node, split.right, split.promoted_key);
 
     int32_t promoted = split.promoted_key;
     PageID right_page = split.right.data().self;
@@ -170,7 +172,7 @@ Status BTree::insert(int32_t key, const RowID& rowid) {
         if (s != Status::Ok) return s;
         s = writeNode(split.right);
         if (s != Status::Ok) return s;
-        // logSplit(parent, split.right, split.promoted_key);  // [P3, fase 3]
+        logSplit(parent, split.right, split.promoted_key);
         promoted = split.promoted_key;
         right_page = split.right.data().self;
     }
@@ -195,6 +197,27 @@ Status BTree::insert(int32_t key, const RowID& rowid) {
     meta.root_page_id = new_root_id;
     meta.height = old_height + 1;
     pm_->writeMeta(meta);
-    // logHeight(old_height, meta.height, new_root_id);  // [P3, fase 3]
+    logHeight(old_height, meta.height, new_root_id);
     return Status::Ok;
+}
+
+void BTree::logSplit(const BTreeNode& left, const BTreeNode& right,
+                     int32_t promoted_key) const {
+    // UNICO punto donde se imprime [SPLIT]. Sale por std::cout para que la demo (opcion 5)
+    // lo muestre en el mismo canal que el resto de la salida, y con endl para que se vea
+    // en vivo el instante en que el arbol crece.
+    if (!verbose_) return;
+    const PageID page = left.data().self;
+    std::cout << "[SPLIT]  " << std::left << std::setw(7)
+              << (left.isLeaf() ? "hoja" : "interno") << " page=" << page
+              << " -> izq=" << page << " der=" << right.data().self
+              << "  clave=" << promoted_key << std::endl;
+}
+
+void BTree::logHeight(size_t old_h, size_t new_h, PageID new_root) const {
+    // UNICO punto donde se imprime [ALTURA]. Solo crece en insert (y en bulkLoad, P4,
+    // que lo llama: no lo reimplementa).
+    if (!verbose_) return;
+    std::cout << "[ALTURA] " << old_h << " -> " << new_h << "  raiz=page " << new_root
+              << std::endl;
 }

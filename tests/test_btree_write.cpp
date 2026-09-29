@@ -5,7 +5,7 @@
 //
 //   fase 1 (open/lectura)  -> casos 1-2
 //   fase 2 (insert/split)  -> casos 3-10
-//   fase 3 (log)           -> pendiente en este commit
+//   fase 3 (log)           -> casos 11-13
 //
 // Lo que NO esta aqui y depende de P4: checkInvariants (tests/TreeInvariants.h) para
 // cerrar el test de estres, y BTree::search para comprobar las 40 duplicadas "por la
@@ -22,6 +22,8 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -54,6 +56,24 @@ struct LeafWalk {
     std::vector<int32_t> keys;
     std::vector<RowID>   rowids;
     size_t               leaves = 0;
+};
+
+// Captura std::cout durante un bloque: los logs salen por std::cout y sin esto el
+// formato no se podria comprobar sin leer la terminal. RAII, para que un fallo en medio
+// no deje la redireccion puesta y tape el reporte del harness.
+struct CoutCapture {
+    std::ostringstream buffer;
+    std::streambuf*    previous = nullptr;
+
+    void begin() { previous = std::cout.rdbuf(buffer.rdbuf()); }
+    std::string end() {
+        if (previous != nullptr) std::cout.rdbuf(previous);
+        previous = nullptr;
+        return buffer.str();
+    }
+    ~CoutCapture() {
+        if (previous != nullptr) std::cout.rdbuf(previous);
+    }
 };
 
 // RowID sin operator<< (solo existe == y <), asi que los RowID se comparan con CHECK.
@@ -393,4 +413,73 @@ TEST(btree_write, insert_estres_5000_aleatorias) {
     std::sort(esperado.begin(), esperado.end());
     std::sort(obtenido.begin(), obtenido.end());
     CHECK(esperado == obtenido); // mismo multiconjunto, claves y RowIDs
+}
+
+// 11. Con verbose apagado (el default) el arbol es silencioso: ni un byte de log aunque
+//     se produzcan splits y crecimientos de altura.
+TEST(btree_write, log_apagado_por_defecto_no_imprime_nada) {
+    TempIndex temp;
+    PageManager pm;
+    CHECK_EQ(PageManager::open(temp.path.string(), 256, pm), Status::Ok);
+    BTree tree;
+    CHECK_EQ(BTree::open(pm, tree), Status::Ok);
+
+    CoutCapture capture;
+    capture.begin();
+    for (int32_t key = 1; key <= 40; ++key) { // 24 parte la raiz: hay split y [ALTURA]
+        CHECK_EQ(tree.insert(key, rid(1, static_cast<SlotID>(key))), Status::Ok);
+    }
+    const std::string out = capture.end();
+
+    CHECK_EQ(tree.height(), size_t(2)); // hubo splits, no los callados: no se imprimio nada
+    CHECK_EQ(out, std::string());
+}
+
+// 12. Con verbose encendido, el formato es EXACTAMENTE el de docs/btree-insert.md. La
+//     pagina 1 es la hoja raiz, la 2 la hoja derecha y la 3 la raiz nueva, asi que la
+//     salida de las 24 inserciones primeras es determinista y se compara entera.
+TEST(btree_write, log_encendido_imprime_split_y_altura_en_formato_exacto) {
+    TempIndex temp;
+    PageManager pm;
+    CHECK_EQ(PageManager::open(temp.path.string(), 256, pm), Status::Ok);
+    BTree tree;
+    CHECK_EQ(BTree::open(pm, tree), Status::Ok);
+    tree.setVerbose(true);
+
+    CoutCapture capture;
+    capture.begin();
+    for (int32_t key = 1; key <= 24; ++key) {
+        CHECK_EQ(tree.insert(key, rid(1, static_cast<SlotID>(key))), Status::Ok);
+    }
+    const std::string out = capture.end();
+
+    CHECK_EQ(out, std::string("[SPLIT]  hoja    page=1 -> izq=1 der=2  clave=13\n"
+                              "[ALTURA] 1 -> 2  raiz=page 3\n"));
+    // "hoja" se alinea a 7 caracteres: "interno" ocupa los 7 justos. Asi el campo de la
+    // primera columna queda siempre en la misma columna de la terminal.
+    CHECK(out.find("[SPLIT]  hoja    page=") != std::string::npos);
+    CHECK(out.find("[ALTURA] 1 -> 2  raiz=page 3") != std::string::npos);
+}
+
+// 13. El split de un nodo INTERNO imprime "interno" en esa misma columna, y el
+//     crecimiento a altura 3 viene con su [ALTURA]. Se llega ahi repitiendo el caso 8.
+TEST(btree_write, log_encendido_tambien_imprime_el_split_interno) {
+    TempIndex temp;
+    PageManager pm;
+    CHECK_EQ(PageManager::open(temp.path.string(), 256, pm), Status::Ok);
+    BTree tree;
+    CHECK_EQ(BTree::open(pm, tree), Status::Ok);
+    tree.setVerbose(true);
+
+    CoutCapture capture;
+    capture.begin();
+    for (int32_t key = 1; key <= 20000 && tree.height() < 3; ++key) {
+        CHECK_EQ(tree.insert(key, rid(1, static_cast<SlotID>(key % 4096))), Status::Ok);
+    }
+    const std::string out = capture.end();
+
+    CHECK_EQ(tree.height(), size_t(3));
+    CHECK(out.find("[SPLIT]  interno page=") != std::string::npos);
+    CHECK(out.find("[ALTURA] 2 -> 3  raiz=page ") != std::string::npos);
+    CHECK(out.find("[SPLIT]  hoja    page=") != std::string::npos); // la hoja parti antes
 }
