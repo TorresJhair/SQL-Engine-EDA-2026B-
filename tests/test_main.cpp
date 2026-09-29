@@ -1,17 +1,23 @@
 // tests/test_main.cpp         [P1] main() y despacho por --suite
 //
-// Registra las 7 suites y las despacha con --suite. Asi ctest puede correrlas de a una
+// Registra las 10 suites y las despacha con --suite. Asi ctest puede correrlas de a una
 // y un fallo queda atribuido a un dueño, no a "los tests".
+//
+// La lista de abajo es la unica fuente: el nombre de la suite, su funcion de enganche y su
+// add_test en el CMakeLists tienen que coincidir. Ojo, son 10 y no las 7 del plan: la
+// separacion de Value, Tuple y DataGen en archivos propios (pedida al hacer PR 3) dejo
+// open_v4.md y el README desactualizados, y eso se corrige en el PR de docs.
 #include "TestHarness.h"
 
 #include <cstring>
 #include <iostream>
 #include <string>
 
-// Cabeceras de las 7 suites: cada una tiene sus test_*.cpp.
+// Cabeceras de las 10 suites: cada una tiene sus test_*.cpp.
 namespace suites {
 void value();          // [P1]
 void tuple();          // [P1]
+void datagen();        // [P1]
 void storage();        // [P1]
 void tree_printer();   // [P1]
 void page_manager();   // [P2]
@@ -49,6 +55,7 @@ struct SuiteName {
 const SuiteName kSuites[] = {
     {"value",        &suites::value},
     {"tuple",        &suites::tuple},
+    {"datagen",      &suites::datagen},
     {"storage",      &suites::storage},
     {"tree_printer", &suites::tree_printer},
     {"page_manager", &suites::page_manager},
@@ -68,9 +75,12 @@ void usage(const char* argv0) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    // Llamar a las 7 suiteRegistration() engancha sus TEST al registro global.
+    // Llamar a las 10 suiteRegistration() engancha sus TEST al registro global. El orden
+    // no importa para el resultado: lo que corre es el orden del registro, que fija el
+    // orden de enlace.
     suites::value();
     suites::tuple();
+    suites::datagen();
     suites::storage();
     suites::tree_printer();
     suites::page_manager();

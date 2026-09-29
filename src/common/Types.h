@@ -14,8 +14,20 @@ struct RowID {
     SlotID slotID;
 };
 
-bool operator==(const RowID&, const RowID&);
-bool operator<(const RowID&, const RowID&);
+// Definidos INLINE y no declarados: son tres lineas, y si quedaran solo declarados el
+// primer uso daria "undefined reference" en el link sin avisar en el build de los stubs.
+// Inline en el header es ademas lo correcto para una funcion de este tamano, asi que no
+// cuesta nada de binario.
+inline bool operator==(const RowID& a, const RowID& b) {
+    return a.pageID == b.pageID && a.slotID == b.slotID;
+}
+
+// El orden es por pagina y luego por slot: es el orden en que el Full Table Scan recorre
+// el heap, y el benchmark lo usa para comparar las dos listas sin ordenarlas.
+inline bool operator<(const RowID& a, const RowID& b) {
+    if (a.pageID != b.pageID) return a.pageID < b.pageID;
+    return a.slotID < b.slotID;
+}
 
 // PreconditionFailed = el que llama rompio el contrato documentado (tupla sin campos,
 // bulkLoad sobre arbol no vacio o con entrada desordenada). NO es un assert: es un Status
