@@ -21,6 +21,15 @@
 #include <vector>
 
 Status BTree::open(PageManager& index_pm, BTree& out) {
+    // Un nodo necesita t >= 2 para existir: con t = 1 el split de un nodo interno deja al
+    // hijo derecho con 0 claves y 1 hijo, que deserialize NO representa (lee 0 hijos cuando
+    // keyCount es 0) y el arbol se rompe en la siguiente lectura; con t = 0 serialize
+    // calcula 2t-1 como size_t y deja de cortar. computeT baja de 2 en page_size <= 46
+    // (la hoja pide 20t+7 y t=2 necesita 47), y PageManager admite desde 28, asi que el
+    // hueco se alcanza con un --page-size chico. PreconditionFailed y NO Corrupt: el
+    // archivo esta bien, lo que no sirve es el page_size con el que se abrio.
+    if (BTreeNode::computeT(index_pm.pageSize()) < 2) return Status::PreconditionFailed;
+
     // Se abre "en su sitio": si algo falla, out queda como estaba (se restaura el
     // puntero), asi un out ya abierto no pierde su arbol por intentar abrir uno roto.
     // verbose_ NO se toca: es una preferencia de presentacion, no estado del arbol, y

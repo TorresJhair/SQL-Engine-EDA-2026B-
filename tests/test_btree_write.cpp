@@ -6,6 +6,7 @@
 //   fase 1 (open/lectura)  -> casos 1-2
 //   fase 2 (insert/split)  -> casos 3-10
 //   fase 3 (log)           -> casos 11-13
+//   fase 4 (guard de page_size) -> caso 14
 //
 // Lo que NO esta aqui y depende de P4: checkInvariants (tests/TreeInvariants.h) para
 // cerrar el test de estres, y BTree::search para comprobar las 40 duplicadas "por la
@@ -482,4 +483,21 @@ TEST(btree_write, log_encendido_tambien_imprime_el_split_interno) {
     CHECK(out.find("[SPLIT]  interno page=") != std::string::npos);
     CHECK(out.find("[ALTURA] 2 -> 3  raiz=page ") != std::string::npos);
     CHECK(out.find("[SPLIT]  hoja    page=") != std::string::npos); // la hoja parti antes
+}
+
+// 14. PageManager admite paginas desde 28 B, pero un nodo necesita t >= 2 para existir
+//     (la hoja pide 20t+7: t = 2 recien cabe en 47 B). Con un page_size mas chico,
+//     open devuelve PreconditionFailed y no crea ninguna raiz.
+TEST(btree_write, open_rechaza_page_size_demasiado_chico_para_un_nodo) {
+    CHECK(BTreeNode::computeT(47) >= uint16_t(2)); // limite inferior de un nodo valido
+    CHECK(BTreeNode::computeT(32) < uint16_t(2));  // 32 B: t = 1, no sirve
+
+    TempIndex temp;
+    PageManager pm;
+    CHECK_EQ(PageManager::open(temp.path.string(), 32, pm), Status::Ok);
+
+    BTree tree;
+    CHECK_EQ(BTree::open(pm, tree), Status::PreconditionFailed);
+    CHECK_EQ(tree.rootPageID(), PageID(0)); // out ni siquiera quedo apuntando al archivo
+    CHECK_EQ(pm.pageCount(), uint32_t(1));  // no se aprovisiono ninguna raiz
 }
