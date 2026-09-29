@@ -56,7 +56,9 @@ private:
     // construye en memoria: no reimplementes la escritura de un nodo en otro archivo.
     Status writeNode(const BTreeNode&) const;                           // [P3] BTreeWrite.cpp
 
-    // UNICOS puntos donde se escribe el log. Ningun otro archivo imprime [SPLIT]/[ALTURA].
+    // UNICOS puntos donde se escribe el log de splits y de altura. Ningun otro archivo de
+    // src/ imprime esas dos lineas (regla 8 de open_v4.md §7: el grep de esas cadenas solo
+    // puede dar resultados en BTreeWrite.cpp, ni siquiera en este comentario).
     void logSplit(const BTreeNode& left, const BTreeNode& right,
                   int32_t promoted_key) const;                           // [P3] bajo verbose_
     void logHeight(size_t old_h, size_t new_h, PageID new_root) const;   // [P3] bajo verbose_

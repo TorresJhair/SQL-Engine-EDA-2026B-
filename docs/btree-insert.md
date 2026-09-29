@@ -228,3 +228,28 @@ verificador podrían detectar de forma local.
 - **No hay `BTree::erase`** y no se planea: el borrado entra a medias en el proyecto
   (`SlottedPage::erase` sí existe y no compacta) y este archivo documenta un índice de solo
   inserción, que es lo que la rúbrica de Fase 1 evalúa.
+
+## 7. ¿Es un B o un B+?
+
+Es un **B+ tree**, y no es una etiqueta: se deduce de cuatro hechos del formato.
+
+| Hecho | Consecuencia |
+|---|---|
+| **Todas las claves y todos los `RowID`s viven en las hojas.** Un nodo interno solo lleva separadores de `4 B` y punteros a página de `4 B`; no hay ningún `RowID` colgando de un separador. | En un B clásico cada `RowID` de `8 B` ocuparía un hueco en los internos y cabrían **muchas menos claves por nodo**, con más niveles para el mismo `n`. |
+| **Los internos solo separan**, y el separador de una hoja es una **copia** de la primera clave del hijo derecho ([`btree-node.md`](btree-node.md) §5), no una clave que se "mudó" para arriba y desapareció del hijo. | La invariante de separadores es `izq <= s <= der` con igualdades permitidas en los dos lados ([§4](#4-regla-de-duplicados)). |
+| **Las hojas están enlazadas** por `nextLeaf`, de izquierda a derecha y terminando en `0`. | `search` baja con `lowerBound` hasta la primera hoja posible y sigue la cadena para juntar duplicados; `indexScan` barre de corrido sin volver a bajar el árbol. Sin esa cadena haría falta un recorrido in-order por la pila de ancestros. |
+| **La hoja raíz puede tener 0 claves** y el árbol sigue siendo válido (la raíz es el único nodo exento del mínimo de ocupación). | Porque la raíz en un B+ es solo la puerta de entrada: no almacena datos, no tiene por qué estar llena. |
+
+Dos consecuencias numéricas que sí importan para la presentación:
+
+- **Fanout enorme.** Con `t = 204`, un nodo interno tiene `2t = 408` hijos: el árbol mantiene
+  **hasta ~166 000 claves con altura 2** (`408 × 407`) y **~67 millones con altura 3**
+  (`408 × 408 × 407`). Por eso `height()` rara vez pasa de 3.
+- **El costo por búsqueda es el mismo para toda clave.** Un `search` recorre exactamente
+  `altura` páginas del índice (raíz → internos → hoja) y después `HeapFile::get` lee 1 de
+  datos: **`altura + 1` páginas**, que es la fórmula que documenta P4 en
+  `docs/benchmark-results.md`. En un B clásico el recorrido dependería de dónde esté la clave.
+- **El precio de no tener borrado** es de coherencia, no de corrección: es un índice de solo
+  inserción **consistente** en todo su rango de operaciones, y los invariantes de
+  `checkInvariants` se mantienen en cada paso. Un árbol con `erase` a medias rompería la cadena
+  `nextLeaf`, que es justo lo que hace útil al B+.
