@@ -108,6 +108,64 @@ std::string referenceTree(const BTree& tree) {
     }
     return out;
 }
+
+// Walk de REFERENCIA para el .dot: DFS pre-orden que define un vertice por pagina y las
+// aristas (punteada para nextLeaf). Devuelve cuantas paginas alcanzo el recorrido, que es
+// la cuenta que pide la tarjeta ("tantos nodos como paginas alcanzables"). Igual que
+// referenceTree, lo que fija es el FORMATO de exportDot, no la numeracion del PageManager.
+struct DotReference {
+    std::string text;
+    size_t      pages = 0;
+};
+
+void walkDotReference(const BTree& tree, PageID page_id, DotReference& out) {
+    const BTreeNode node = tree.readNode(page_id);
+    ++out.pages;
+    out.text += "  p" + std::to_string(page_id) + " [label=\"";
+    out.text += (node.isLeaf() ? "hoja" : "interno") + std::string(": ");
+    if (node.keyCount() == 0) {
+        out.text += "<vacia>";
+    } else {
+        for (uint16_t i = 0; i < node.keyCount(); ++i) {
+            if (i != 0) out.text += " ";
+            out.text += std::to_string(node.keyAt(i));
+        }
+    }
+    out.text += "\", shape=" + std::string(node.isLeaf() ? "box" : "ellipse") + "];\n";
+    if (node.isLeaf()) {
+        if (node.nextLeaf() != 0) {
+            out.text += "  p" + std::to_string(page_id) + " -> p" +
+                        std::to_string(node.nextLeaf()) + " [style=dotted];\n";
+        }
+        return;
+    }
+    const uint16_t children = node.keyCount() + 1;
+    for (uint16_t i = 0; i < children; ++i) {
+        const PageID child = node.childAt(i);
+        out.text += "  p" + std::to_string(page_id) + " -> p" +
+                    std::to_string(child) + ";\n";
+        walkDotReference(tree, child, out);
+    }
+}
+
+DotReference referenceDot(const BTree& tree) {
+    DotReference out;
+    const PageID root = tree.rootPageID();
+    out.text = "digraph BTree {\n";
+    if (root == PageID(0)) {
+        out.text += "  p0 [label=\"(sin raiz: llama a BTree::open antes)\", shape=box];\n";
+    } else {
+        walkDotReference(tree, root, out);
+    }
+    out.text += "}\n";
+    return out;
+}
+
+std::string renderDot(const BTree& tree) {
+    std::ostringstream out;
+    exportDot(tree, out);
+    return out.str();
+}
 }  // namespace
 
 namespace suites {
@@ -173,10 +231,37 @@ TEST(tree_printer, arbol_de_3_niveles_mostrando_raiz_internos_y_hijos) {
     CHECK(out.find("├──") != std::string::npos);
     CHECK(out.find("│") != std::string::npos);     // continuacion bajo un hijo no-ultimo
     CHECK(out.find("-> hoja p") != std::string::npos); // flecha a la hoja siguiente
+
+    // exportDot comparte la misma mirada del arbol y cuenta las paginas alcanzables.
+    const DotReference dot = referenceDot(tree);
+    CHECK_EQ(renderDot(tree), dot.text);
+    CHECK(dot.pages == 8); // 1 raiz + 2 internos + 5 hojas en page_size 64 con 10 claves
+    CHECK(dot.text.find("[style=dotted]") != std::string::npos); // nextLeaf dibujada
 }
 
 // --- Sin open -----------------------------------------------------------------
 TEST(tree_printer, sin_open_avisa_que_falta_rootPageID) {
     BTree tree; // sin BTree::open
     CHECK_EQ(render(tree), std::string("(sin raiz: llama a BTree::open antes)\n"));
+    CHECK_EQ(renderDot(tree), referenceDot(tree).text);
+    CHECK_EQ(referenceDot(tree).pages, size_t(0));
+}
+
+// --- exportDot: una sola hoja ------------------------------------------------
+TEST(tree_printer, exportDot_de_una_hoja_tiene_un_solo_vertice) {
+    TempIndex temp;
+    PageManager pm;
+    BTree tree;
+    CHECK_EQ(makeTree(temp.path, 256, tree, pm), Status::Ok);
+    CHECK_EQ(tree.insert(7, RowID{1, 1}), Status::Ok);
+
+    const DotReference dot = referenceDot(tree);
+    CHECK_EQ(renderDot(tree), dot.text);
+    CHECK_EQ(dot.pages, size_t(1));
+    CHECK(dot.text.find("[label=\"hoja: 7\", shape=box]") != std::string::npos);
+    CHECK(dot.text.find("[label=\"") != std::string::npos);
+    CHECK(dot.text.find("digraph BTree {") != std::string::npos);
+    CHECK(dot.text.find("}\n") != std::string::npos);
+    // Sin nextLeaf ni hijos: no debe haber aristas.
+    CHECK(dot.text.find("->") == std::string::npos);
 }

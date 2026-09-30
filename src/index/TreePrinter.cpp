@@ -60,6 +60,49 @@ size_t drawSubtree(const BTree& tree, PageID page_id,
     return reached;
 }
 
+// La etiqueta de un vertice del .dot: "tipo: claves" segun el formato ASCII (§3.1).
+std::string dotLabel(const BTreeNode& node) {
+    std::ostringstream label;
+    label << (node.isLeaf() ? "hoja" : "interno") << ": ";
+    if (node.keyCount() == 0) {
+        label << "<vacia>";
+    } else {
+        for (uint16_t i = 0; i < node.keyCount(); ++i) {
+            if (i != 0) label << " ";
+            label << node.keyAt(i);
+        }
+    }
+    return label.str();
+}
+
+// DFS pre-orden para el .dot: define el vertice del nodo, las aristas a sus hijos (o la
+// arista punteada nextLeaf en las hojas), y recorre. Devuelve cuantas paginas alcanzo,
+// que es lo que exige la tarjeta: un .dot con tantos nodos como paginas alcanzables.
+size_t drawDot(const BTree& tree, PageID page_id, std::ostream& out) {
+    const BTreeNode node = tree.readNode(page_id);
+    const size_t reached = 1;
+
+    out << "  p" << page_id << " [label=\"" << dotLabel(node) << "\", shape=";
+    out << (node.isLeaf() ? "box" : "ellipse") << "];\n";
+
+    if (node.isLeaf()) {
+        if (node.nextLeaf() != 0) {
+            out << "  p" << page_id << " -> p" << node.nextLeaf()
+                << " [style=dotted];\n";
+        }
+        return reached;
+    }
+
+    const uint16_t children = node.keyCount() + 1;
+    size_t total = reached;
+    for (uint16_t i = 0; i < children; ++i) {
+        const PageID child = node.childAt(i);
+        out << "  p" << page_id << " -> p" << child << ";\n";
+        total += drawDot(tree, child, out);
+    }
+    return total;
+}
+
 }  // namespace
 
 void printTree(const BTree& tree, std::ostream& out) {
@@ -84,4 +127,16 @@ void printTree(const BTree& tree, std::ostream& out) {
     for (uint16_t i = 0; i < children; ++i) {
         drawSubtree(tree, root_node.childAt(i), "", (i + 1 == children), out);
     }
+}
+
+void exportDot(const BTree& tree, std::ostream& out) {
+    // Un BTree sin open() no tiene paginas que exportar: el grafo es solo la raiz faltante.
+    const PageID root = tree.rootPageID();
+    out << "digraph BTree {\n";
+    if (root == PageID(0)) {
+        out << "  p0 [label=\"(sin raiz: llama a BTree::open antes)\", shape=box];\n";
+    } else {
+        drawDot(tree, root, out);
+    }
+    out << "}\n";
 }
