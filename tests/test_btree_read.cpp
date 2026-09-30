@@ -1,8 +1,10 @@
 // tests/test_btree_read.cpp
 #include "TestHarness.h"
+#include "TreeInvariants.h"
 #include "index/BTree.h"
 #include "storage/PageManager.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -93,6 +95,7 @@ TEST(btree_read, search_en_arbol_vacio_y_claves_presentes_o_ausentes) {
     const std::vector<RowID> matches = tree.search(20);
     CHECK_EQ(matches.size(), size_t(1));
     CHECK((matches[0] == rid(4, 2)));
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, search_encuentra_duplicados_que_cruzan_hojas) {
@@ -113,6 +116,7 @@ TEST(btree_read, search_encuentra_duplicados_que_cruzan_hojas) {
         CHECK((matches[slot] == rid(9, slot)));
     }
     CHECK(tree.search(4243).empty());
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, search_encuentra_clave_que_inicia_en_frontera_de_hoja) {
@@ -126,6 +130,7 @@ TEST(btree_read, search_encuentra_clave_que_inicia_en_frontera_de_hoja) {
     const std::vector<RowID> matches = tree.search(12);
     CHECK_EQ(matches.size(), size_t(1));
     CHECK((matches[0] == rid(1, 12)));
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, index_scan_coincide_con_full_scan_filtrado_en_orden) {
@@ -147,7 +152,7 @@ TEST(btree_read, index_scan_coincide_con_full_scan_filtrado_en_orden) {
     CHECK_EQ(BTree::open(index_pm, tree), Status::Ok);
     HeapFile heap(heap_pm);
 
-    for (int32_t row = 0; row < 120; ++row) {
+    for (int32_t row = 0; row < 1000; ++row) {
         const int32_t key = (row * 5) % 11;
         const Tuple tuple = datasetTuple(key, "row-" + std::to_string(row));
         RowID row_id{};
@@ -171,6 +176,7 @@ TEST(btree_read, index_scan_coincide_con_full_scan_filtrado_en_orden) {
         CHECK_EQ(indexed[i].at(1).asVarChar(), scanned[i].at(1).asVarChar());
     }
     CHECK(tree.indexScan(99, heap).empty());
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, bulk_load_vacio_y_una_hoja) {
@@ -194,6 +200,7 @@ TEST(btree_read, bulk_load_vacio_y_una_hoja) {
     const BTreeNode root = tree.readNode(tree.rootPageID());
     CHECK(root.isLeaf());
     CHECK_EQ(root.keyCount(), uint16_t(23));
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, bulk_load_distribuye_uniformemente_24_y_47_claves) {
@@ -228,6 +235,7 @@ TEST(btree_read, bulk_load_distribuye_uniformemente_24_y_47_claves) {
         CHECK_EQ(leaves[2].keyCount(), uint16_t(15));
         CHECK_EQ(root.keyAt(0), int32_t(16));
         CHECK_EQ(root.keyAt(1), int32_t(32));
+        CHECK(checkInvariants(tree).ok);
     }
 }
 
@@ -255,6 +263,7 @@ TEST(btree_read, bulk_load_construye_tres_niveles_con_ocupacion_minima) {
     CHECK_EQ(tree.size(), size_t(553));
     CHECK_EQ(tree.search(0).size(), size_t(1));
     CHECK_EQ(tree.search(552).size(), size_t(1));
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, bulk_load_rechaza_precondiciones_sin_mutar_el_arbol) {
@@ -282,6 +291,7 @@ TEST(btree_read, bulk_load_rechaza_precondiciones_sin_mutar_el_arbol) {
     const std::vector<RowID> existing = tree.search(5);
     CHECK_EQ(existing.size(), size_t(1));
     CHECK((existing[0] == rid(3, 2)));
+    CHECK(checkInvariants(tree).ok);
 }
 
 TEST(btree_read, bulk_load_conserva_duplicados_entre_hojas) {
@@ -300,5 +310,80 @@ TEST(btree_read, bulk_load_conserva_duplicados_entre_hojas) {
     CHECK_EQ(matches.size(), size_t(40));
     for (SlotID slot = 0; slot < 40; ++slot) {
         CHECK((matches[slot] == rid(9, slot)));
+    }
+    CHECK(checkInvariants(tree).ok);
+}
+
+TEST(btree_read, bulk_load_es_equivalente_a_insert_en_contenido_y_busqueda) {
+    TempIndex bulk_temp;
+    TempIndex insert_temp;
+    PageManager bulk_pm;
+    PageManager insert_pm;
+    CHECK_EQ(PageManager::open(bulk_temp.path.string(), 256, bulk_pm), Status::Ok);
+    CHECK_EQ(PageManager::open(insert_temp.path.string(), 256, insert_pm), Status::Ok);
+    BTree bulk_tree;
+    BTree insert_tree;
+    CHECK_EQ(BTree::open(bulk_pm, bulk_tree), Status::Ok);
+    CHECK_EQ(BTree::open(insert_pm, insert_tree), Status::Ok);
+    const auto entries = ascendingEntries(600);
+
+    CHECK_EQ(bulk_tree.bulkLoad(entries), Status::Ok);
+    for (const auto& entry : entries) {
+        CHECK_EQ(insert_tree.insert(entry.first, entry.second), Status::Ok);
+    }
+
+    CHECK_EQ(bulk_tree.size(), insert_tree.size());
+    for (int32_t key = 0; key < 600; ++key) {
+        const auto bulk_matches = bulk_tree.search(key);
+        const auto insert_matches = insert_tree.search(key);
+        CHECK_EQ(bulk_matches.size(), insert_matches.size());
+        CHECK((bulk_matches == insert_matches));
+    }
+    CHECK(checkInvariants(bulk_tree).ok);
+    CHECK(checkInvariants(insert_tree).ok);
+}
+
+TEST(btree_read, bulk_load_de_23_mas_insert_divide_la_hoja_raiz) {
+    TempIndex temp;
+    PageManager pm;
+    CHECK_EQ(PageManager::open(temp.path.string(), 256, pm), Status::Ok);
+    BTree tree;
+    CHECK_EQ(BTree::open(pm, tree), Status::Ok);
+    CHECK_EQ(tree.bulkLoad(ascendingEntries(23)), Status::Ok);
+    const PageID old_root = tree.rootPageID();
+
+    CHECK_EQ(tree.insert(23, rid(1, 23)), Status::Ok);
+
+    CHECK(tree.rootPageID() != old_root);
+    CHECK_EQ(tree.height(), size_t(2));
+    CHECK_EQ(tree.size(), size_t(24));
+    const BTreeNode old_leaf = tree.readNode(old_root);
+    CHECK_EQ(old_leaf.nextLeaf(), tree.readNode(tree.rootPageID()).childAt(1));
+    CHECK_EQ(tree.search(23).size(), size_t(1));
+    CHECK(checkInvariants(tree).ok);
+}
+
+TEST(btree_read, inserciones_despues_de_bulk_load_mantienen_invariantes_por_bloques) {
+    TempIndex temp;
+    PageManager pm;
+    CHECK_EQ(PageManager::open(temp.path.string(), 256, pm), Status::Ok);
+    BTree tree;
+    CHECK_EQ(BTree::open(pm, tree), Status::Ok);
+    CHECK_EQ(tree.bulkLoad(ascendingEntries(46)), Status::Ok);
+
+    for (int32_t first_key = 46; first_key < 646; first_key += 7) {
+        const int32_t end_key = std::min(first_key + 7, 646);
+        for (int32_t key = first_key; key < end_key; ++key) {
+            CHECK_EQ(tree.insert(key, rid(1, static_cast<SlotID>(key))), Status::Ok);
+        }
+        CHECK(checkInvariants(tree).ok);
+    }
+
+    CHECK_EQ(tree.size(), size_t(646));
+    CHECK_EQ(tree.height(), size_t(3));
+    for (int32_t key = 0; key < 646; ++key) {
+        const auto matches = tree.search(key);
+        CHECK_EQ(matches.size(), size_t(1));
+        CHECK((matches[0] == rid(1, static_cast<SlotID>(key))));
     }
 }
