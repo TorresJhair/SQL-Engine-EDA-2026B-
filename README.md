@@ -41,8 +41,31 @@ Medir en un build optimizado no esconde errores de formato, y esa es la razón: 
 un nodo devuelve un `Status::NodeOverflow`, no dispara un `assert`. `-DNDEBUG` borra los
 `assert` y el desborde se sigue detectando igual.
 
-El menú de 6 opciones es de P4. Cuando esté escrito va a entender `--demo 0|1|4|5|6`,
-`--page-size` y `--n`.
+El ejecutable ofrece un menú interactivo y acepta `--demo 0|1|2|3|4|5|6`,
+`--page-size`, `--n` y `--full`. Para ver todas las opciones:
+
+```bash
+./build/main --help
+```
+
+La opción 0 ejecuta las seis demos en orden. Las opciones 1-4 comparten los archivos
+`data.db` e `index.db` durante una misma ejecución; por eso conviene usar el menú o
+`--demo 0` para que cada opción encuentre los datos creados por la anterior. Al iniciar,
+el programa elimina esos dos archivos del directorio de trabajo. Las opciones 5 y 6 usan
+archivos temporales propios.
+
+```bash
+./build/main --demo 0                   # presentacion completa
+./build/main --demo 5                   # splits con paginas de 256 B
+./build/main --demo 6                   # ambas curvas del benchmark
+./build/main --demo 6 --n 50000         # una N, en ambas curvas
+./build/main --demo 6 --full            # tabla completa con repeticiones
+./build/main --page-size 256 --demo 5   # la opcion 5 fuerza 256 B
+```
+
+`--page-size` ajusta las opciones 1-4 y selecciona una sola curva en la opción 6; la
+opción 5 siempre usa 256 B. `--n` limita el benchmark a un tamaño para depuración.
+`--full` muestra también el tiempo del punto de 100 000 filas.
 
 ## 3. Correr los tests
 
@@ -122,7 +145,7 @@ uno en la demo: con `t = 204` no ocurre un solo split hasta ~408 inserciones.
 ## 7. Resultados del benchmark
 
 > **Pendiente — P2 y P4.** El protocolo de medición va en `docs/benchmark-method.md` (P2, se
-> escribe **antes** de medir) y la tabla con los datos en `docs/benchmark-results.md` (P4).
+> escribe **antes** de medir) y la tabla con los datos de P2 va en `docs/benchmark-results.md` (P4).
 >
 > Criterio de aceptación: las dos curvas (4096 B y 256 B) sobre base temporal propia, los 6
 > valores de N canónicos (20, 500, 1e3, 5e3, 1e4, 1e5), R repeticiones, altura y ratio de
