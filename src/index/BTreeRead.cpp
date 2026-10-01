@@ -10,13 +10,27 @@ std::vector<RowID> BTree::search(int32_t key) const {
 	std::vector<RowID> matches;
 	if (pm_ == nullptr) return matches;
 
-	PageID page_id = findLeaf(key, Bias::Left, nullptr);
+	// Keep the leaf read during the descent. Calling findLeaf() and then reading its
+	// result again charged the first leaf twice, making an index scan cost height + 2
+	// page reads instead of the documented height + 1 (including the heap fetch).
+	PageID page_id = rootPageID();
+	BTreeNode leaf = readNode(page_id);
+	while (!leaf.isLeaf()) {
+		if (leaf.childCount() == 0) {
+			throw std::runtime_error("BTree::search: nodo interno sin hijos en pagina " +
+			                         std::to_string(page_id));
+		}
+		const BTreeNode::SearchHit path = leaf.searchInNode(key);
+		page_id = leaf.childAt(path.idx);
+		leaf = readNode(page_id);
+	}
+
 	while (page_id != 0) {
-		const BTreeNode leaf = readNode(page_id);
 		const BTreeNode::SearchHit hit = leaf.searchInNode(key);
 		if (!hit.found) {
 			if (hit.idx < leaf.keyCount()) break;
 			page_id = leaf.nextLeaf();
+			if (page_id != 0) leaf = readNode(page_id);
 			continue;
 		}
 
@@ -26,6 +40,7 @@ std::vector<RowID> BTree::search(int32_t key) const {
 			matches.push_back(leaf.rowIDAt(i));
 		}
 		page_id = leaf.nextLeaf();
+		if (page_id != 0) leaf = readNode(page_id);
 	}
 	return matches;
 }
