@@ -1,5 +1,6 @@
 #include "TestHarness.h"
 
+#include "bench/Benchmark.h"
 #include "bench/DataGen.h"
 #include "bench/Metrics.h"
 #include "storage/HeapFile.h"
@@ -10,6 +11,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -211,6 +213,66 @@ TEST(page_manager, rechaza_tupla_que_no_cabe_en_una_pagina_vacia) {
     CHECK_EQ(heap.insert(too_large, rid), Status::TupleTooLarge);
     CHECK_EQ(pm.pageCount(), uint32_t(1));
     CHECK_EQ(pm.pageWrites(), uint64_t(0));
+}
+
+TEST(page_manager, benchmark_crossover_devuelve_las_bandas_especificadas) {
+    const std::vector<Band> large_pages = Benchmark::crossover(4096, 131);
+    CHECK_EQ(large_pages.size(), size_t(3));
+    CHECK_EQ(large_pages[0].from, size_t(1));
+    CHECK_EQ(large_pages[0].to, size_t(131));
+    CHECK(large_pages[0].winner == Band::Winner::Scan);
+    CHECK_EQ(large_pages[1].from, size_t(132));
+    CHECK_EQ(large_pages[1].to, size_t(262));
+    CHECK(large_pages[1].winner == Band::Winner::Tie);
+    CHECK_EQ(large_pages[2].from, size_t(263));
+    CHECK_EQ(large_pages[2].to, size_t(100000));
+    CHECK(large_pages[2].winner == Band::Winner::Index);
+
+    const std::vector<Band> small_pages = Benchmark::crossover(256, 8);
+    CHECK_EQ(small_pages.size(), size_t(5));
+    CHECK_EQ(small_pages[0].from, size_t(1));
+    CHECK_EQ(small_pages[0].to, size_t(8));
+    CHECK(small_pages[0].winner == Band::Winner::Scan);
+    CHECK_EQ(small_pages[1].from, size_t(9));
+    CHECK_EQ(small_pages[1].to, size_t(16));
+    CHECK(small_pages[1].winner == Band::Winner::Tie);
+    CHECK_EQ(small_pages[2].from, size_t(17));
+    CHECK_EQ(small_pages[2].to, size_t(23));
+    CHECK(small_pages[2].winner == Band::Winner::Index);
+    CHECK_EQ(small_pages[3].from, size_t(24));
+    CHECK_EQ(small_pages[3].to, size_t(24));
+    CHECK(small_pages[3].winner == Band::Winner::Tie);
+    CHECK_EQ(small_pages[4].from, size_t(25));
+    CHECK_EQ(small_pages[4].to, size_t(100000));
+    CHECK(small_pages[4].winner == Band::Winner::Index);
+}
+
+TEST(page_manager, benchmark_integrado_muestra_dos_curvas_y_las_seis_n) {
+    std::ostringstream output;
+    CHECK_EQ(Benchmark::run(output), Status::Ok);
+
+    const std::string report = output.str();
+    CHECK(report.find("Curva page_size=4096 B; tuplas/pagina=131") != std::string::npos);
+    CHECK(report.find("Curva page_size=256 B; tuplas/pagina=8") != std::string::npos);
+
+    for (const char* row : {
+             "20 | 1 | 1 (2) | 2 | 1 | 0.5x",
+             "500 | 2 | 4 (5) | 3 | 4 | 1.3x",
+             "1000 | 2 | 8 (9) | 3 | 8 | 2.7x",
+             "5000 | 2 | 39 (40) | 3 | 39 | 13.0x",
+             "10000 | 2 | 77 (78) | 3 | 77 | 25.7x",
+             "100000 | 2 | 764 (765) | 3 | 764 | 254.7x",
+             "20 | 1 | 3 (4) | 2 | 3 | 1.5x",
+             "500 | 2 | 63 (64) | 3 | 63 | 21.0x",
+             "1000 | 3 | 125 (126) | 4 | 125 | 31.2x",
+             "5000 | 3 | 625 (626) | 4 | 625 | 156.2x",
+             "10000 | 3 | 1250 (1251) | 4 | 1250 | 312.5x",
+             "100000 | 4 | 12500 (12501) | 5 | 12500 | 2500.0x"}) {
+        CHECK(report.find(row) != std::string::npos);
+    }
+    CHECK(report.find("N=263..100000: indice") != std::string::npos);
+    CHECK(report.find("N=24: empate") != std::string::npos);
+    CHECK(report.find("N=25..100000: indice") != std::string::npos);
 }
 
 namespace suites {
