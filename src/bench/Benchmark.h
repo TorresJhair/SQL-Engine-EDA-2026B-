@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <ostream>
+#include <string>
 #include <vector>
 
 // Las DOS curvas (4096 y luego 256) sobre base temporal propia, con reset entre
@@ -20,6 +21,11 @@ struct BenchmarkOptions {
                               // las 12 filas salen con R repeticiones, que es la tabla de
                               // docs/benchmark-results.md
     size_t repeats   = 0;     // 0 = el protocolo de R: 5 hasta N = 1e4, 1 en N = 1e5
+    // Ruta del CSV a escribir. Vacio = no exportar. Las DOS curvas van en el MISMO
+    // archivo, separadas por la columna page_size, y las filas se escriben en el
+    // mismo bucle que mide: el CSV no puede divergir de la tabla que se imprime.
+    // Se lo usa para graficar X = N contra Y = tiempo (scripts/plot_benchmark.py).
+    std::string csv_path;
 };
 
 // Una banda contigua de N en la que gana lo mismo. La isla de empate de N = 24 a

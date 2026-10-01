@@ -1,5 +1,14 @@
 build/
+build-rel/
+.venv/
 *.db
 *.dot
 salidas/
 *.o
+# Imagenes que produce la opcion 4 al renderizar tree.dot con Graphviz
+*.png
+*.svg
+*.pdf
+# Salidas del benchmark: el CSV de --csv y el PNG que dibuja scripts/plot_benchmark.py
+*.csv
+__pycache__/

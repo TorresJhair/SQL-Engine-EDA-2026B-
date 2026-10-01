@@ -6,7 +6,9 @@
 #include "storage/PageManager.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -22,13 +24,18 @@ struct Options {
     int demo = -1;
     bool page_size_set = false;
     bool full = false;
+    std::string csv_path; // vacio = no exportar el benchmark a CSV
 };
 
 void printUsage(std::ostream& out) {
     out << "Uso: main [--demo 0|1|2|3|4|5|6] [--page-size BYTES] [--n N] [--full]\n"
+           "            [--csv RUTA.csv]\n"
            "Sin --demo abre el menu interactivo. --demo 0 ejecuta las seis demos.\n"
            "--page-size aplica a las opciones 1-4; la demo 5 fuerza 256 B.\n"
-           "La demo 6 corre ambas curvas, salvo que se indique --page-size.\n";
+           "--n acota las tuplas de la demo 1 y el N del benchmark; 0 = 100000.\n"
+           "La demo 6 corre ambas curvas, salvo que se indique --page-size.\n"
+           "--csv guarda las 12 filas de la demo 6 (ambas curvas, columna page_size)\n"
+           "para graficarlas con scripts/plot_benchmark.py.\n";
 }
 
 bool parseSize(const std::string& text, size_t& value) {
@@ -55,6 +62,15 @@ bool parseOptions(int argc, char** argv, Options& options, bool& help_requested)
         }
         if (argument == "--full") {
             options.full = true;
+            continue;
+        }
+        // --csv toma una RUTA, no un numero: se maneja antes del parseo numerico.
+        if (argument == "--csv") {
+            if (i + 1 >= argc) {
+                std::cerr << "Falta la ruta del CSV para --csv\n";
+                return false;
+            }
+            options.csv_path = argv[++i];
             continue;
         }
         if (argument != "--demo" && argument != "--page-size" && argument != "--n") {
@@ -142,7 +158,10 @@ bool demoStorage(const Options& options) {
         return false;
     }
     HeapFile heap(pm);
-    constexpr size_t row_count = 100000;
+    // --n acota cuantas tuplas se insertan. El default es 100000, que es el dataset
+    // de la presentacion; con un N chico el arbol queda con pocas hojas y la demo 4 lo
+    // dibuja en vez de colgarse renderizando. Con N = 0 vale el default.
+    const size_t row_count = options.n != 0 ? options.n : 100000;
     RowID first_row{};
     for (size_t i = 0; i < row_count; ++i) {
         const int32_t key = static_cast<int32_t>(i + 1);
@@ -214,6 +233,28 @@ bool demoBulkLoad(const Options& options, bool& index_built) {
     return true;
 }
 
+// Graphviz es una dependencia OPCIONAL: si el binario "dot" no esta instalado, el .dot
+// sigue siendo valido y se avisa como convertirlo a mano en vez de fallar la demo.
+bool graphvizAvailable() {
+    return std::system("command -v dot >/dev/null 2>&1") == 0;
+}
+
+// Convierte tree.dot a imagen con el binario `dot` de Graphviz. Un formato no soportado por
+// la instalacion (p.ej. png sin el plugin de render) NO es un fallo: se distingue del .dot
+// mal formado leyendo su codigo de salida y su stderr.
+bool renderDotImage(const std::string& dot_path, const std::string& format,
+                    const std::string& image_path, bool& unsupported_format) {
+    unsupported_format = false;
+    const std::string command = "dot -T" + format + " \"" + dot_path + "\" -o \"" +
+                                image_path + "\" 2>/dev/null";
+    const int status = std::system(command.c_str());
+    if (status == 0) return true;
+    // Graphviz responde 0 incluso cuando el formato no existe, asi que la unica senal
+    // fiable es que NO se haya escrito la imagen.
+    unsupported_format = !std::filesystem::exists(image_path);
+    return !unsupported_format;
+}
+
 bool demoTree(const Options& options) {
     PageManager index_pm;
     if (!reportStatus("Abrir index.db",
@@ -230,8 +271,37 @@ bool demoTree(const Options& options) {
         return false;
     }
     exportDot(tree, dot_file);
-    std::cout << "Arbol exportado a tree.dot.\n";
-    return true;
+    dot_file.close();
+    std::cout << "Arbol exportado a tree.dot (" << tree.height() << " niveles).\n";
+
+    // El .dot es texto; la imagen la produce Graphviz. Sin `dot` en el PATH el archivo
+    // sigue siendo valido, asi que esto NO es un error de la demo.
+    if (!graphvizAvailable()) {
+        std::cout << "Graphviz no esta instalado: no se genero la imagen. "
+                     "Para verla, instalalo (sudo apt install graphviz) o convertila "
+                     "a mano:\n  dot -Tsvg tree.dot -o tree.svg\n";
+        return true;
+    }
+
+    bool ok = true;
+    for (const auto& entry : {std::pair<const char*, const char*>{"svg", "tree.svg"},
+                              {"png", "tree.png"}}) {
+        const std::string format = entry.first;
+        const std::string image_path = entry.second;
+        std::error_code ignored;
+        std::filesystem::remove(image_path, ignored); // que un resto viejo no confunda
+        bool unsupported = false;
+        if (renderDotImage("tree.dot", format, image_path, unsupported)) {
+            std::cout << "Imagen generada: " << image_path << '\n';
+        } else if (unsupported) {
+            std::cout << "Graphviz de esta instalacion no soporta -T" << format
+                      << " (falta su plugin); se omite " << image_path << ".\n";
+        } else {
+            std::cerr << "Graphviz fallo al convertir tree.dot a " << format << '\n';
+            ok = false;
+        }
+    }
+    return ok;
 }
 
 struct TempIndexFile {
@@ -270,6 +340,7 @@ bool demoBenchmark(const Options& options) {
     benchmark_options.page_size = options.page_size_set ? options.page_size : 0;
     benchmark_options.n = options.n;
     benchmark_options.full = options.full;
+    benchmark_options.csv_path = options.csv_path;
     return reportStatus("Benchmark", Benchmark::run(std::cout, benchmark_options));
 }
 
@@ -297,9 +368,9 @@ void printMenu() {
     std::cout << "\n1. Storage   - insertar tuplas y mostrar una pagina\n"
                  "2. Pager     - recorrer el heap y mostrar contadores\n"
                  "3. Bulk load - construir el indice desde el heap\n"
-                 "4. Arbol     - imprimir el B+ tree y exportar tree.dot\n"
+                 "4. Arbol     - imprimir el B+ tree y exportar tree.dot (y su imagen)\n"
                  "5. Split     - mostrar splits con paginas de 256 B\n"
-                 "6. Benchmark - Index Scan vs Full Table Scan\n"
+                 "6. Benchmark - Index Scan vs Full Table Scan (--csv lo exporta)\n"
                  "0. Presentacion completa\n"
                  "q. Salir\n> ";
 }

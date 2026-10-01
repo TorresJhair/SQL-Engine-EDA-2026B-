@@ -11,7 +11,9 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -104,6 +106,22 @@ Status Benchmark::run(std::ostream& out, const BenchmarkOptions& opt) {
     out << "Benchmark: tupla=27 B, esquema=INT key + VARCHAR(16), build=Debug; "
            "configure RelWithDebInfo para medir\n";
 #endif
+
+    // El CSV opcional se escribe ACA, en el mismo bucle que imprime la tabla: asi
+    // los numeros del archivo son los mismos que salen en pantalla. Si el archivo no
+    // se puede abrir, el benchmark CONTINUA (el CSV es un extra, no un requisito).
+    std::ofstream csv;
+    if (!opt.csv_path.empty()) {
+        csv.open(opt.csv_path);
+        if (!csv) {
+            std::cerr << "No se pudo abrir el CSV para escribir: " << opt.csv_path
+                      << " (el benchmark sigue igual, sin exportar)\n";
+        } else {
+            csv << "page_size,N,altura,heap_data_pages,heap_file_pages,"
+                   "index_reads,full_reads,ratio,build_ms,index_ms,full_ms\n";
+        }
+    }
+
     for (size_t page_size : page_sizes) {
         const size_t tuples_per_page = (page_size - 8) / 31;
         out << "\nCurva page_size=" << page_size << " B; tuplas/pagina=" << tuples_per_page << '\n';
@@ -174,11 +192,27 @@ Status Benchmark::run(std::ostream& out, const BenchmarkOptions& opt) {
 
             const size_t heap_data_pages = heap_pm.pageCount() - 1;
             const double ratio = index_reads == 0 ? 0.0 : static_cast<double>(full_reads) / index_reads;
+            // Misma regla que la tabla: sin --full, N = 100 000 no publica tiempos. En
+            // el CSV esos dos campos quedan VACIOS en vez de inventar un numero.
+            const bool times_omitted = n == 100000 && !opt.full;
+            if (csv) {
+                csv << page_size << ',' << n << ',' << tree.height() << ','
+                    << heap_data_pages << ',' << heap_pm.pageCount() << ','
+                    << index_reads << ',' << full_reads << ','
+                    << std::fixed << std::setprecision(1) << ratio << ','
+                    << std::setprecision(3) << build_ms << ',';
+                if (times_omitted) {
+                    csv << ',' << '\n';
+                } else {
+                    csv << std::setprecision(3) << median(index_times) << ','
+                        << median(full_times) << '\n';
+                }
+            }
             out << n << " | " << tree.height() << " | " << heap_data_pages << " ("
                 << heap_pm.pageCount() << ") | " << index_reads << " | " << full_reads
                 << " | " << std::fixed << std::setprecision(1) << ratio << "x | "
                 << std::setprecision(3) << build_ms << " | ";
-            if (n == 100000 && !opt.full) {
+            if (times_omitted) {
                 out << "omitido | omitido\n";
             } else {
                 out << median(index_times) << " | " << median(full_times) << '\n';

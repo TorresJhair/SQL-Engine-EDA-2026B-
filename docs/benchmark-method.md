@@ -56,6 +56,61 @@ lo que siguen comprobándose aunque el build defina `NDEBUG`.
 el benchmark conserva y reporta sus conteos, pero omite esos dos tiempos para acortar la
 demostración.
 
+## Exportar a CSV y graficar
+
+La opción 6 puede escribir sus propias filas en un CSV con `--csv RUTA`. Las dos curvas van
+en el **mismo** archivo, separadas por la columna `page_size`:
+
+```bash
+./build/main --demo 6 --full --csv benchmark.csv
+```
+
+```
+page_size,N,altura,heap_data_pages,heap_file_pages,index_reads,full_reads,ratio,build_ms,index_ms,full_ms
+4096,20,1,1,2,2,1,0.5,0.051,0.030,0.121
+4096,100000,2,764,765,3,764,254.7,5.915,0.042,111.758
+256,100000,4,12500,12501,5,12500,2500.0,35.007,0.027,161.391
+```
+
+El CSV se escribe en el mismo bucle que imprime la tabla, con los mismos valores: no hay
+parseo de texto ni una segunda medición, así que el archivo no puede divergir de la salida por
+pantalla. Sin `--full`, el punto `N = 100 000` deja `index_ms` y `full_ms` vacíos, que es la
+forma en CSV de lo que la tabla marca como `omitido`. Si el archivo no se puede abrir, el
+benchmark avisa por `stderr` y continúa igual: el CSV es un extra, no un requisito.
+
+`scripts/plot_benchmark.py` dibuja ese CSV con el eje X en `N` y dos métricas en el eje Y:
+el tiempo de búsqueda en ms y las páginas leídas por búsqueda. Para cada métrica escribe **un
+PNG por `page_size`**, o sea cuatro imágenes:
+
+```bash
+python3 scripts/plot_benchmark.py --csv benchmark.csv
+# -> benchmark_timing_256.png   benchmark_timing_4096.png
+#    benchmark_pages_256.png    benchmark_pages_4096.png
+
+python3 scripts/plot_benchmark.py --csv benchmark.csv --metric pages  # solo paginas
+python3 scripts/plot_benchmark.py --csv benchmark.csv --linear       # eje X lineal
+python3 scripts/plot_benchmark.py --csv benchmark.csv --linear-y     # eje Y lineal
+```
+
+Están separados porque las curvas de las dos medidas en un mismo eje no se leen. El Index Scan
+se mantiene cerca de 0.01 ms (o de 3 páginas) y el Full Table Scan llega a ~150 ms (o a 12 500
+páginas): cuatro órdenes de magnitud, así que en un eje Y lineal lo que está en el piso queda
+aplastado. Por eso el eje Y es **logarítmico** y los gráficos de una misma métrica usan **la
+misma escala**, calculada sobre todas las filas, para que las dos curvas de página se comparen
+a simple vista. El eje X también es logarítmico porque `N` va de 20 a 100 000.
+
+Los gráficos de páginas y los de tiempos cuentan cosas distintas. Los conteos de páginas son
+**deterministas** para estos tamaños y este esquema: el Index Scan se mantiene en 3–5 lecturas
+mientras el Full Scan crece con `N`, y eso es el argumento algorítmico del índice. Los tiempos
+dependen de la máquina y son orientativos. Además, como el benchmark siempre reporta los
+conteos y solo omite los tiempos caros de `N = 100 000` sin `--full`, los gráficos de páginas
+salen con los seis puntos **sin necesidad de `--full`**.
+
+El script es el equivalente de `dot -Tpng tree.dot` para el benchmark: toma el archivo de datos
+y produce las imágenes. Como con Graphviz, `matplotlib` es una dependencia opcional: si no está
+instalado, el script dice cómo instalarla y sale con código 0 sin fallar. Los puntos con tiempos
+vacíos se omiten del gráfico en lugar de dibujarse como cero.
+
 ## Punto de cruce
 
 `Benchmark::crossover(page_size, tuples_per_page)` clasifica cada `N` entre 1 y 100 000
