@@ -144,10 +144,60 @@ uno en la demo: con `t = 204` no ocurre un solo split hasta ~408 inserciones.
 
 ## 7. Resultados del benchmark
 
-> **Pendiente — P2 y P4.** El protocolo de medición va en `docs/benchmark-method.md` (P2, se
-> escribe **antes** de medir) y la tabla con los datos de P2 va en `docs/benchmark-results.md` (P4).
->
-> Criterio de aceptación: las dos curvas (4096 B y 256 B) sobre base temporal propia, los 6
-> valores de N canónicos (20, 500, 1e3, 5e3, 1e4, 1e5), R repeticiones, altura y ratio de
-> I/Os por curva, y el punto de cruce calculado por el propio programa
-> (`Benchmark::crossover`) y no escrito a mano.
+La corrida de referencia se ejecutó en `RelWithDebInfo` con `--demo 6 --full` (GNU C++ 13.3).
+Cada curva usa archivos temporales independientes. La altura es el número de niveles del
+índice; las lecturas de índice incluyen la búsqueda y la lectura del RowID en el heap. El
+Full Scan visita todas las páginas de datos. La página 0 de metadatos no se cuenta.
+
+### Conteos de páginas
+
+Los conteos son deterministas para estos tamaños y este esquema (`INT key` + `VARCHAR(16)`,
+27 B por tupla). `páginas heap` muestra páginas de datos y, entre paréntesis, el total físico
+incluida la metadata.
+
+| page_size | N | altura | páginas heap (total) | lecturas índice | lecturas Full Scan | ratio Full/Index |
+|---:|---:|---:|---:|---:|---:|---:|
+| 4096 B | 20 | 1 | 1 (2) | 2 | 1 | 0.5x |
+| 4096 B | 500 | 2 | 4 (5) | 3 | 4 | 1.3x |
+| 4096 B | 1 000 | 2 | 8 (9) | 3 | 8 | 2.7x |
+| 4096 B | 5 000 | 2 | 39 (40) | 3 | 39 | 13.0x |
+| 4096 B | 10 000 | 2 | 77 (78) | 3 | 77 | 25.7x |
+| 4096 B | 100 000 | 2 | 764 (765) | 3 | 764 | 254.7x |
+| 256 B | 20 | 1 | 3 (4) | 2 | 3 | 1.5x |
+| 256 B | 500 | 2 | 63 (64) | 3 | 63 | 21.0x |
+| 256 B | 1 000 | 3 | 125 (126) | 4 | 125 | 31.2x |
+| 256 B | 5 000 | 3 | 625 (626) | 4 | 625 | 156.2x |
+| 256 B | 10 000 | 3 | 1 250 (1 251) | 4 | 1 250 | 312.5x |
+| 256 B | 100 000 | 4 | 12 500 (12 501) | 5 | 12 500 | 2 500.0x |
+
+### Tiempos de referencia
+
+El build del índice se mide una vez, separado de la búsqueda. Para `N <= 10 000`, las
+búsquedas usan cinco repeticiones y se reporta la mediana; para `N = 100 000`, una repetición.
+Los tiempos varían con el equipo, el compilador y la caché del sistema operativo; los conteos
+de páginas anteriores son la comparación reproducible.
+
+| page_size | N | construcción índice (ms) | Index Scan mediana (ms) | Full Scan mediana (ms) |
+|---:|---:|---:|---:|---:|
+| 4096 B | 20 | 0.025 | 0.010 | 0.011 |
+| 4096 B | 500 | 0.060 | 0.017 | 0.151 |
+| 4096 B | 1 000 | 0.081 | 0.018 | 0.319 |
+| 4096 B | 5 000 | 0.312 | 0.020 | 1.679 |
+| 4096 B | 10 000 | 0.600 | 0.021 | 3.301 |
+| 4096 B | 100 000 | 5.529 | 0.028 | 32.558 |
+| 256 B | 20 | 0.017 | 0.010 | 0.019 |
+| 256 B | 500 | 0.394 | 0.015 | 0.436 |
+| 256 B | 1 000 | 0.804 | 0.021 | 0.871 |
+| 256 B | 5 000 | 3.898 | 0.022 | 4.388 |
+| 256 B | 10 000 | 7.515 | 0.024 | 8.613 |
+| 256 B | 100 000 | 77.863 | 0.036 | 88.504 |
+
+`Benchmark::crossover` calcula las bandas comparando páginas por búsqueda (`altura + 1`)
+con páginas del Full Scan:
+
+- **4096 B:** Scan para N=1–131, empate en 132–262, Index desde 263.
+- **256 B:** Scan para N=1–8, empate en 9–16, Index en 17–23, empate en 24 e Index desde 25.
+
+La metodología, el formato de `FileMeta` y las limitaciones de las métricas se describen en
+[`docs/benchmark-method.md`](docs/benchmark-method.md) y
+[`docs/page-manager.md`](docs/page-manager.md).
