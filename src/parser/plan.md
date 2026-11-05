@@ -98,3 +98,14 @@ Los nodos de operaciones deben conservar operador e hijos, para que una futura f
 - La lista de proyección contiene identificadores, sin alias ni expresiones; `*` es la única proyección especial.
 - Las condiciones admiten comparaciones combinadas mediante `AND`/`OR` y paréntesis lógicos.
 - Se aceptan enteros, decimales y cadenas como operandos sintácticos. La semántica y ejecución quedan para otra fase.
+
+## Fases de implementación
+
+1. **Congelar gramática y contratos:** confirmar los tokens usados, la precedencia, la asociatividad, los límites de una consulta y el contrato de errores/AST. Documentar explícitamente el caso de paréntesis que requiere retroceso controlado.
+2. **Ampliar el lexer:** incorporar `PLUS`, `MINUS` y `SLASH`, actualizar `tokenTypeName` y separar los signos de los literales sin perder el signo permitido en exponentes científicos.
+3. **Preparar pruebas léxicas:** actualizar expectativas de números signados y cubrir operadores contiguos, expresiones negativas y exponentes con signo.
+4. **Definir los tipos del AST y del resultado:** crear nodos para consulta, proyección, expresiones y condiciones, además de diagnósticos con posición; fijar cómo se propagan errores léxicos.
+5. **Implementar el parser por precedencia:** construir primero consumo de tokens y consulta/proyección, luego factores, términos y expresiones, después comparaciones, `AND`, `OR` y agrupación lógica con retroceso.
+6. **Completar errores sintácticos:** validar `;` y EOF, producir ubicaciones precisas y asegurar que los errores de ambas ramas especulativas reporten el punto de fallo más útil.
+7. **Añadir pruebas del parser:** cubrir consultas válidas, forma y precedencia del AST, paréntesis aritméticos/lógicos y entradas inválidas en cada frontera de producción.
+8. **Integrar y documentar:** registrar `.cpp` y suites de pruebas explícitamente en CMake/CTest, actualizar el README del parser y compilar/ejecutar las suites relevantes.
