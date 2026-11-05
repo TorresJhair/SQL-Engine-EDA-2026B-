@@ -4,7 +4,7 @@
 #include <iterator>
 #include <string>
 
-#include "lexer.hpp"
+#include "lexer/lexer.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc > 2) {

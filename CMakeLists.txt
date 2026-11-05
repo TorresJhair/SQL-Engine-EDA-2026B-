@@ -24,11 +24,17 @@ add_library(phase1_core STATIC
   src/index/BTreeNode.cpp src/index/BTreeWrite.cpp src/index/BTreeRead.cpp
   src/index/TreePrinter.cpp
   src/bench/Metrics.cpp  src/bench/DataGen.cpp      src/bench/Benchmark.cpp
+  src/lexer/token.cpp    src/lexer/lexer.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
 add_executable(main src/main.cpp)
 target_link_libraries(main PRIVATE phase1_core)
+
+# CLI del analizador lexico (Practica 4): lee SQL de un archivo o de stdin e imprime
+# los tokens. Trae su propio main(), por eso NO entra en phase1_core.
+add_executable(lexer src/lexer/lexer_cli.cpp)
+target_link_libraries(lexer PRIVATE phase1_core)
 
 add_executable(tests
   tests/test_main.cpp
@@ -41,6 +47,14 @@ add_executable(tests
 )
 # OJO: tests/ esta en la raiz, no en src/. Ver el arbol de arriba.
 target_link_libraries(tests PRIVATE phase1_core)
+
+# Tests del lexico (Practica 4). Cada uno trae su propio main() y su propio juego de
+# macros CHECK, asi que son EJECUTABLES APARTE y no entran en el target 'tests' (que
+# despacha por --suite con TestHarness.h). Se migraran a ese harness cuando convenga.
+add_executable(test_lexer tests/test_lexer.cpp)
+target_link_libraries(test_lexer PRIVATE phase1_core)
+add_executable(test_token tests/test_token.cpp)
+target_link_libraries(test_token PRIVATE phase1_core)
 
 target_include_directories(phase1_core PUBLIC src)
 target_include_directories(tests   PRIVATE tests)
@@ -56,3 +70,5 @@ add_test(NAME btree_write   COMMAND tests --suite btree_write)
 add_test(NAME btree_read    COMMAND tests --suite btree_read)
 add_test(NAME invariants    COMMAND tests --suite invariants)
 # Un add_test por suite: una suite roja se ve sola en el informe de CI.
+add_test(NAME lexer         COMMAND test_lexer)
+add_test(NAME token         COMMAND test_token)

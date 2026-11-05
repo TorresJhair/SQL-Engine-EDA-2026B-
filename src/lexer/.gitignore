@@ -1,5 +1,0 @@
-*.md
-*.out
-/lexer
-/test_lexer
-/test_token

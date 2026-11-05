@@ -1,4 +1,4 @@
-#include "token.hpp"
+#include "lexer/token.hpp"
 
 namespace sql {
 const char* tokenTypeName(TokenType t) {

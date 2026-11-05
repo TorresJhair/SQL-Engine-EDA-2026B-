@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "lexer.hpp"
+#include "lexer/lexer.hpp"
 
 using sql::LexResult;
 using sql::Lexer;

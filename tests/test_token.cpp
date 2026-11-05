@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
-#include "token.hpp"
+#include "lexer/token.hpp"
 
 using namespace sql;
 
