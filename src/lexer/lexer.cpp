@@ -56,12 +56,15 @@ LexResult Lexer::tokenize() {
         // Una sola cadena if / else-if: cada carácter se despacha exactamente una vez.
         if (isLetter(c) || isNonAscii(c))
                                scanWord(line, col);
-        else if (isDigit(c) || ((c == '+' || c == '-') && isDigit(peek(1))))
+        else if (isDigit(c))
                                scanNumber(line, col);
         else if (c == '\'')    scanString(line, col);
         else if (c == ',')   { advance(); emit(TokenType::COMMA,     ",", line, col); }
         else if (c == ';')   { advance(); emit(TokenType::SEMICOLON, ";", line, col); }
         else if (c == '*')   { advance(); emit(TokenType::STAR,      "*", line, col); }
+        else if (c == '+')   { advance(); emit(TokenType::PLUS,      "+", line, col); }
+        else if (c == '-')   { advance(); emit(TokenType::MINUS,     "-", line, col); }
+        else if (c == '/')   { advance(); emit(TokenType::SLASH,     "/", line, col); }
         else if (c == '(')   { advance(); emit(TokenType::LPAREN,    "(", line, col); }
         else if (c == ')')   { advance(); emit(TokenType::RPAREN,    ")", line, col); }
         else if (c == '=' || c == '<' || c == '>' || c == '!') scanOperator(line, col);
@@ -97,7 +100,6 @@ void Lexer::scanWord(int line, int col) {
 
 void Lexer::scanNumber(int line, int col) {
     std::string n;
-    if (peek() == '+' || peek() == '-') n += advance();
     while (isDigit(peek())) n += advance();
     bool decimal = false, exponent = false, bad = false;
     std::string why;

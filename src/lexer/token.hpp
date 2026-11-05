@@ -10,6 +10,8 @@ enum class TokenType {
     IDENTIFIER, INTEGER_LITERAL, DECIMAL_LITERAL, STRING_LITERAL,
     // Operadores relacionales
     EQUAL, NOT_EQUAL, LESS, GREATER, LESS_EQUAL, GREATER_EQUAL,
+    // Operadores aritmeticos
+    PLUS, MINUS, SLASH,
     // Puntuación y extensiones
     COMMA, SEMICOLON, STAR, LPAREN, RPAREN,
     // Fin de entrada

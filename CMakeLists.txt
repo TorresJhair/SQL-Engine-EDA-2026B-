@@ -25,6 +25,7 @@ add_library(phase1_core STATIC
   src/index/TreePrinter.cpp
   src/bench/Metrics.cpp  src/bench/DataGen.cpp      src/bench/Benchmark.cpp
   src/lexer/token.cpp    src/lexer/lexer.cpp
+  src/parser/parser.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
@@ -55,6 +56,8 @@ add_executable(test_lexer tests/test_lexer.cpp)
 target_link_libraries(test_lexer PRIVATE phase1_core)
 add_executable(test_token tests/test_token.cpp)
 target_link_libraries(test_token PRIVATE phase1_core)
+add_executable(test_parser tests/test_parser.cpp)
+target_link_libraries(test_parser PRIVATE phase1_core)
 
 target_include_directories(phase1_core PUBLIC src)
 target_include_directories(tests   PRIVATE tests)
@@ -72,3 +75,4 @@ add_test(NAME invariants    COMMAND tests --suite invariants)
 # Un add_test por suite: una suite roja se ve sola en el informe de CI.
 add_test(NAME lexer         COMMAND test_lexer)
 add_test(NAME token         COMMAND test_token)
+add_test(NAME parser        COMMAND test_parser)

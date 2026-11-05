@@ -96,28 +96,34 @@ int main() {
               keywords.tokens.size() == 2);
 
         auto signedNumbers = lex("-42 +7 -3.14 +0.5");
-        CHECK("3. enteros con signo",
-              signedNumbers.tokens[0].type == T::INTEGER_LITERAL &&
-              signedNumbers.tokens[0].lexeme == "-42" &&
-              signedNumbers.tokens[1].type == T::INTEGER_LITERAL &&
-              signedNumbers.tokens[1].lexeme == "+7");
-        CHECK("3. decimales con signo",
-              signedNumbers.tokens[2].type == T::DECIMAL_LITERAL &&
-              signedNumbers.tokens[2].lexeme == "-3.14" &&
-              signedNumbers.tokens[3].type == T::DECIMAL_LITERAL &&
-              signedNumbers.tokens[3].lexeme == "+0.5" && signedNumbers.ok());
+        CHECK("3. signos aritmeticos separados de enteros y decimales",
+              types(signedNumbers) == std::vector<T>({
+                  T::MINUS, T::INTEGER_LITERAL, T::PLUS, T::INTEGER_LITERAL,
+                  T::MINUS, T::DECIMAL_LITERAL, T::PLUS, T::DECIMAL_LITERAL,
+                  T::END_OF_FILE
+              }) && signedNumbers.tokens[1].lexeme == "42" &&
+              signedNumbers.tokens[5].lexeme == "3.14" && signedNumbers.ok());
 
         auto scientific = lex("1e5 1e-10 2.5E+3 -4E2 +6.02e23");
         CHECK("3. notacion cientifica",
               types(scientific) == std::vector<T>({
                   T::DECIMAL_LITERAL, T::DECIMAL_LITERAL, T::DECIMAL_LITERAL,
-                  T::DECIMAL_LITERAL, T::DECIMAL_LITERAL, T::END_OF_FILE
+                  T::MINUS, T::DECIMAL_LITERAL, T::PLUS, T::DECIMAL_LITERAL,
+                  T::END_OF_FILE
               }) && scientific.ok());
         CHECK("3. notacion cientifica conserva el lexema",
               scientific.tokens[1].lexeme == "1e-10" &&
               scientific.tokens[2].lexeme == "2.5E+3" &&
-              scientific.tokens[3].lexeme == "-4E2" &&
-              scientific.tokens[4].lexeme == "+6.02e23");
+              scientific.tokens[4].lexeme == "4E2" &&
+              scientific.tokens[6].lexeme == "6.02e23");
+
+        auto arithmetic = lex("a+2*b/4-1");
+        CHECK("3. operadores aritmeticos incluso sin espacios",
+              types(arithmetic) == std::vector<T>({
+                  T::IDENTIFIER, T::PLUS, T::INTEGER_LITERAL, T::STAR,
+                  T::IDENTIFIER, T::SLASH, T::INTEGER_LITERAL, T::MINUS,
+                  T::INTEGER_LITERAL, T::END_OF_FILE
+              }));
     }
 
     {
@@ -218,9 +224,11 @@ int main() {
         auto signedInvalid = lex("-12abc +3.5x");
         CHECK("6. numeros signados mal formados son errores completos",
               signedInvalid.errors.size() == 2 &&
-              signedInvalid.errors[0].lexeme == "-12abc" &&
-              signedInvalid.errors[1].lexeme == "+3.5x" &&
-              signedInvalid.tokens.size() == 1);
+              signedInvalid.errors[0].lexeme == "12abc" &&
+              signedInvalid.errors[1].lexeme == "3.5x" &&
+              types(signedInvalid) == std::vector<T>({
+                  T::MINUS, T::PLUS, T::END_OF_FILE
+              }));
     }
 
     {
@@ -266,8 +274,8 @@ int main() {
         CHECK("7. numero cientifico signado dentro de consulta",
               types(query) == std::vector<T>({
                   T::KEYWORD_WHERE, T::IDENTIFIER, T::GREATER_EQUAL,
-                  T::DECIMAL_LITERAL, T::SEMICOLON, T::END_OF_FILE
-              }) && query.tokens[3].lexeme == "-1e-10" && query.ok());
+                  T::MINUS, T::DECIMAL_LITERAL, T::SEMICOLON, T::END_OF_FILE
+              }) && query.tokens[4].lexeme == "1e-10" && query.ok());
     }
 
     std::cout << "\nResumen: " << passed << " OK, " << failed << " FAIL\n";

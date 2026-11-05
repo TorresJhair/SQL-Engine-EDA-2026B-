@@ -18,6 +18,9 @@ const char* tokenTypeName(TokenType t) {
         case TokenType::GREATER:         return "GREATER";
         case TokenType::LESS_EQUAL:      return "LESS_EQUAL";
         case TokenType::GREATER_EQUAL:   return "GREATER_EQUAL";
+        case TokenType::PLUS:            return "PLUS";
+        case TokenType::MINUS:           return "MINUS";
+        case TokenType::SLASH:           return "SLASH";
         case TokenType::COMMA:           return "COMMA";
         case TokenType::SEMICOLON:       return "SEMICOLON";
         case TokenType::STAR:            return "STAR";

@@ -56,6 +56,9 @@ int main() {
     CHECK_STR_EQ("GREATER       -> \"GREATER\"",       tokenTypeName(TokenType::GREATER),       "GREATER");
     CHECK_STR_EQ("LESS_EQUAL    -> \"LESS_EQUAL\"",    tokenTypeName(TokenType::LESS_EQUAL),    "LESS_EQUAL");
     CHECK_STR_EQ("GREATER_EQUAL -> \"GREATER_EQUAL\"", tokenTypeName(TokenType::GREATER_EQUAL), "GREATER_EQUAL");
+    CHECK_STR_EQ("PLUS          -> \"PLUS\"",          tokenTypeName(TokenType::PLUS),          "PLUS");
+    CHECK_STR_EQ("MINUS         -> \"MINUS\"",         tokenTypeName(TokenType::MINUS),         "MINUS");
+    CHECK_STR_EQ("SLASH         -> \"SLASH\"",         tokenTypeName(TokenType::SLASH),         "SLASH");
 
     // 4. Puntuación y Extensiones
     std::cout << "\n-- 4. Puntuacion y Extensiones --\n";
