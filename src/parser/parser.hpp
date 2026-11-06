@@ -1,14 +1,14 @@
 #pragma once
 
 #include "lexer/lexer.hpp"
-#include "parser/ast.hpp"
+#include "parser/grammar.hpp"
 
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace sql {
 
+// Diagnostico de un error lexico o sintactico, con su ubicacion.
 struct ParseDiagnostic {
     std::string message;
     std::string lexeme;
@@ -17,40 +17,33 @@ struct ParseDiagnostic {
     bool lexical = false;
 };
 
-struct ParseResult {
-    std::optional<SelectStatement> statement;
-    std::vector<ParseDiagnostic> errors;
-    bool ok() const { return statement.has_value() && errors.empty(); }
+// Una linea de la traza del analizador predictivo por pila.
+struct ParseStep {
+    std::string stack;   // contenido de la pila (fondo a la izquierda, tope a la derecha)
+    std::string input;   // token actual y lo que resta de la entrada
+    std::string action;  // "expandir (n) A -> ..." o "emparejar X"
 };
 
+struct ParseResult {
+    bool accepted = false;
+    std::vector<ParseDiagnostic> errors;
+    std::vector<ParseStep> trace;
+    bool ok() const { return accepted && errors.empty(); }
+};
+
+// Analizador sintactico predictivo LL(1) no recursivo: usa una pila explicita y
+// la tabla M[A, a] de Grammar. Reconoce (acepta/rechaza) la cadena de tokens del
+// lexer; no construye AST.
 class Parser {
 public:
     explicit Parser(const LexResult& input);
     ParseResult parse();
 
+    const Grammar& grammar() const { return grammar_; }
+
 private:
-    struct Failure {
-        ParseDiagnostic diagnostic;
-        size_t position;
-    };
-
+    Grammar grammar_;
     LexResult input_;
-    size_t position_ = 0;
-
-    const Token& current() const;
-    bool match(TokenType type);
-    Token expect(TokenType type);
-    [[noreturn]] void fail(const std::string& expected) const;
-
-    SelectStatement parseStatement();
-    std::shared_ptr<Condition> parseCondition();
-    std::shared_ptr<Condition> parseDisjunction();
-    std::shared_ptr<Condition> parseConjunction();
-    std::shared_ptr<Condition> parsePredicate();
-    std::shared_ptr<Condition> parseComparison();
-    std::shared_ptr<Expression> parseExpression();
-    std::shared_ptr<Expression> parseTerm();
-    std::shared_ptr<Expression> parseFactor();
 };
 
 }  // namespace sql

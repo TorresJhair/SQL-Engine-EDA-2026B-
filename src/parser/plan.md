@@ -1,3 +1,13 @@
+> **Nota (Práctica 5):** este plan describía un parser de **descenso recursivo
+> con retroceso**, que fue reemplazado por el analizador **predictivo LL(1) no
+> recursivo basado en tabla y pila** exigido por la práctica. La ambigüedad del
+> `(` se eliminó unificando expresión y condición (ya no hay backtracking) y la
+> gramática resultante es LL(1) estricta. La especificación vigente está en
+> [grammar.md](grammar.md) y el diseño del motor en [README.md](README.md). Lo
+> de abajo se conserva solo como historial de la fase previa.
+
+---
+
 # Plan detallado: parser para consultas `SELECT`
 
 ## Objetivo y límites
