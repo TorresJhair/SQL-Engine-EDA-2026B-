@@ -25,7 +25,7 @@ add_library(phase1_core STATIC
   src/index/TreePrinter.cpp
   src/bench/Metrics.cpp  src/bench/DataGen.cpp      src/bench/Benchmark.cpp
   src/lexer/token.cpp    src/lexer/lexer.cpp
-  src/parser/parser.cpp
+  src/parser/grammar.cpp src/parser/parser.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
