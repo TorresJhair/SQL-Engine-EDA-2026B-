@@ -24,62 +24,54 @@ sql::ParseResult parse(const std::string& source) {
 }  // namespace
 
 int main() {
-    using sql::Condition;
-    using sql::Expression;
-    using sql::TokenType;
-
+    // La gramatica debe ser LL(1): la tabla se construye sin conflictos.
     {
-        const auto result = parse("SELECT nombre, edad FROM estudiantes;");
-        CHECK("consulta sin WHERE y lista de columnas", result.ok());
-        CHECK("AST conserva columnas y tabla",
-              result.statement && !result.statement->select_all &&
-              result.statement->columns == std::vector<std::string>({"nombre", "edad"}) &&
-              result.statement->table == "estudiantes" && !result.statement->where);
-    }
-    {
-        const auto result = parse("SELECT * FROM t WHERE a = 1 OR b = 2 AND c > 3;");
-        CHECK("consulta SELECT * valida", result.ok() && result.statement->select_all);
-        const auto& where = result.statement->where;
-        CHECK("AND tiene precedencia mayor que OR",
-              where && where->kind == Condition::Kind::Or &&
-              where->right_condition && where->right_condition->kind == Condition::Kind::And);
-        CHECK("comparacion conserva operador y literales",
-              where && where->left_condition &&
-              where->left_condition->kind == Condition::Kind::Comparison &&
-              where->left_condition->op == TokenType::EQUAL &&
-              where->left_condition->right_expression->value == "1");
-    }
-    {
-        const auto result = parse("SELECT x FROM t WHERE (a + 1) > -2.5;");
-        const auto& where = result.statement->where;
-        CHECK("parentesis aritmeticos, decimal y menos unario", result.ok() && where &&
-              where->left_expression->kind == Expression::Kind::Binary &&
-              where->left_expression->op == TokenType::PLUS &&
-              where->right_expression->kind == Expression::Kind::UnaryMinus &&
-              where->right_expression->left->kind == Expression::Kind::DecimalLiteral);
-    }
-    {
-        const auto result = parse("SELECT x FROM t WHERE (a = 1 OR b = 2) AND c <> 'z';");
-        const auto& where = result.statement->where;
-        CHECK("parentesis logicos con OR dentro de AND", result.ok() && where &&
-              where->kind == Condition::Kind::And && where->left_condition &&
-              where->left_condition->kind == Condition::Kind::Or);
+        sql::Grammar g;
+        CHECK("gramatica sin conflictos LL(1)", g.conflicts().empty());
+        CHECK("tabla tiene entrada M[consulta, SELECT]",
+              g.tableEntry(sql::NonTerminal::Consulta, sql::TokenType::KEYWORD_SELECT) >= 0);
+        CHECK("celda vacia da -1",
+              g.tableEntry(sql::NonTerminal::Consulta, sql::TokenType::KEYWORD_FROM) < 0);
     }
 
+    // Consultas validas (deben ser ACEPTADAS).
+    const std::vector<std::string> valid = {
+        "SELECT * FROM t;",
+        "SELECT nombre, edad FROM estudiantes;",
+        "SELECT a FROM t WHERE a = 1;",
+        "SELECT * FROM t WHERE a = 1 OR b = 2 AND c > 3;",
+        "SELECT x FROM t WHERE (a + 1) > -2.5;",
+        "SELECT x FROM t WHERE (a = 1 OR b = 2) AND c <> 'z';",
+        "SELECT a, b, c FROM t WHERE a <= b * 2 - 1 AND nombre = 'pepe';",
+    };
+    for (const auto& source : valid) {
+        const auto result = parse(source);
+        CHECK(std::string("ACEPTADA: ") + source, result.ok() && !result.trace.empty());
+    }
+
+    // Consultas invalidas (deben ser RECHAZADAS, con ubicacion, sin crashear).
     const std::vector<std::string> invalid = {
-        "SELECT FROM t;", "SELECT a, FROM t;", "SELECT a FROM t WHERE a = ;",
-        "SELECT a FROM t WHERE a + > 2;", "SELECT a FROM t WHERE (a = 1;",
-        "SELECT a FROM t", "SELECT a FROM t; SELECT b FROM t;"
+        "SELECT FROM t;",                      // proyeccion vacia
+        "SELECT a, FROM t;",                   // coma sin columna
+        "SELECT a FROM t WHERE a = ;",         // comparacion sin lado derecho
+        "SELECT a FROM t WHERE a + > 2;",      // operador sin operando
+        "SELECT a FROM t WHERE (a = 1;",       // parentesis sin cerrar
+        "SELECT a FROM t",                     // falta ;
+        "SELECT a FROM t; SELECT b FROM t;",   // tokens despues del ;
+        "SELECT a FROM 123;",                  // tabla no es identificador
+        "FROM t;",                             // no empieza con SELECT
     };
     for (const auto& source : invalid) {
         const auto result = parse(source);
-        CHECK("consulta invalida rechazada", !result.ok() && !result.errors.empty() &&
+        CHECK(std::string("RECHAZADA: ") + source,
+              !result.ok() && !result.errors.empty() &&
               result.errors.front().line >= 1 && result.errors.front().column >= 1);
     }
+
+    // Un error lexico se propaga como fallo del parseo.
     {
-        const auto lexed = sql::Lexer("SELECT a # FROM t;").tokenize();
-        const auto result = sql::Parser(lexed).parse();
-        CHECK("error lexico se propaga como error de parseo",
+        const auto result = parse("SELECT a # FROM t;");
+        CHECK("error lexico se propaga",
               !result.ok() && !result.errors.empty() && result.errors.front().lexical);
     }
 
