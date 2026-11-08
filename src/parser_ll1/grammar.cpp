@@ -1,4 +1,4 @@
-#include "parser/grammar.hpp"
+#include "parser_ll1/grammar.hpp"
 
 #include <algorithm>
 #include <iomanip>

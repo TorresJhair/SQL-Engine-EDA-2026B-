@@ -25,7 +25,7 @@ add_library(phase1_core STATIC
   src/index/TreePrinter.cpp
   src/bench/Metrics.cpp  src/bench/DataGen.cpp      src/bench/Benchmark.cpp
   src/lexer/token.cpp    src/lexer/lexer.cpp
-  src/parser/grammar.cpp src/parser/parser.cpp
+  src/parser_ll1/grammar.cpp src/parser_ll1/parser.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
@@ -41,7 +41,7 @@ target_link_libraries(lexer PRIVATE phase1_core)
 # archivo o de stdin, imprime la traza de la pila y acepta/rechaza la consulta.
 # --grammar vuelca producciones, FIRST/FOLLOW y la tabla LL(1). Trae su propio
 # main(), por eso NO entra en phase1_core.
-add_executable(parser src/parser/parser_cli.cpp)
+add_executable(parser src/parser_ll1/parser_cli.cpp)
 target_link_libraries(parser PRIVATE phase1_core)
 
 add_executable(tests
