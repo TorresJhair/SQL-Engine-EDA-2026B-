@@ -11,10 +11,6 @@
 **Modalidad:** Grupal  
 **Puntaje:** 20.0 puntos  
 
-**Integrantes del Equipo:**
-- **Lorenzo Torrez** — *GitHub:* `JLtz00` — *Email:* `lorenzoltx@gmail.com`
-- **Jhair Torres Chávez** — *GitHub:* `TorresJhair` — *Email:* `jtorreschav@unsa.edu.pe`
-
 ---
 
 # INFORME TÉCNICO DE LABORATORIO: ANALIZADOR SINTÁCTICO PREDICTIVO LL(1)
