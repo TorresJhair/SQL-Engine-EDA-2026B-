@@ -1,7 +1,8 @@
-# Motor de base de datos SQL — Fase 1: Storage Engine + B+ Tree
+# Motor de base de datos SQL — Proyecto Integrado
 
-Heap de páginas con *slotted page* y un índice B+ tree sobre él. El árbol es de
-altura mínima alcanzable y sus nodos caben enteros en una página de 4096 B.
+Sistema modular para un servidor de base de datos relacional progresivo:
+- **Fase 1 (Almacenamiento e Índices):** Heap de páginas con *slotted page* y un índice B+ tree sobre él (`src/storage`, `src/index`). El árbol es de altura mínima alcanzable y sus nodos caben enteros en una página de 4096 B.
+- **Fase 2 (Front-end SQL):** Analizador léxico (`src/lexer`) y analizador sintáctico predictivo no recursivo LL(1) basado en pila y tabla $M[A, a]$ (`src/parser_ll1`).
 
 ## 1. Entorno y dependencias
 
@@ -234,19 +235,45 @@ y PDF**, así que la opción 4 produce las dos imágenes sin configurar nada. Si
 `dot` no está, el programa avisa, deja el `.dot` igual y sigue: el `.dot` siempre es válido y
 se puede convertir a mano con `dot -Tsvg tree.dot -o tree.svg`.
 
+### Analizador léxico y sintáctico SQL (Fase 2)
+
+El proyecto incluye las herramientas de línea de comandos del analizador léxico (`src/lexer`) y sintáctico predictivo LL(1) (`src/parser_ll1`):
+
+```bash
+# Compilar los ejecutables de la Fase 2
+cmake --build build --target lexer parser
+
+# 1. Analizador léxico (Práctica 4): tokeniza SQL desde archivo o stdin
+./build/lexer src/lexer/examples/valida.sql
+echo "SELECT nombre, edad FROM estudiantes WHERE edad >= 18;" | ./build/lexer
+
+# 2. Analizador sintáctico predictivo LL(1) (Práctica 5): traza paso a paso y veredicto
+./build/parser src/parser_ll1/examples/01_valida_simple.sql
+./build/parser src/parser_ll1/examples/02_valida_compleja.sql
+./build/parser src/parser_ll1/examples/03_error_palabra_desordenada.sql
+
+# Modo silencioso (solo veredicto ACEPTADA / RECHAZADA con diagnóstico)
+./build/parser --quiet src/parser_ll1/examples/01_valida_simple.sql
+
+# Volcar las 39 producciones BNF, conjuntos FIRST/FOLLOW y tabla de parseo M[A, a]
+./build/parser --grammar
+```
+
 ## 3. Correr los tests
 
 ```bash
-ctest --test-dir build --output-on-failure     # las 10 suites
-ctest --test-dir build -R storage              # una sola
+ctest --test-dir build --output-on-failure     # las 13 suites
+ctest --test-dir build -R storage              # una sola suite de almacenamiento
+ctest --test-dir build -R "parser|lexer|token" # suites de la Fase 2
 ./build/tests --suite storage                  # igual, sin ctest
-./build/tests                                  # todas ("all" si no se pasa --suite)
+./build/test_parser                            # tests del parser LL(1)
+./build/test_lexer                             # tests del analizador léxico
 ```
 
 Hay un `add_test` por suite, así que una suite roja se ve sola en el informe en vez de
-desaparecer dentro de un "los tests fallan". Las diez son `value`, `tuple`, `datagen`,
-`storage`, `tree_printer`, `page_manager`, `btree_node`, `btree_write`, `btree_read` e
-`invariants`.
+desaparecer dentro de un "los tests fallan". Las trece suites son:
+- **Fase 1 (Almacenamiento e Índices):** `value`, `tuple`, `datagen`, `storage`, `tree_printer`, `page_manager`, `btree_node`, `btree_write`, `btree_read` e `invariants`.
+- **Fase 2 (Léxico y Sintáctico):** `lexer`, `token` y `parser`.
 
 Dos reglas del harness que no son arbitrarias:
 
