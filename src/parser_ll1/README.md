@@ -1,4 +1,4 @@
-# src/parser — Analizador sintáctico predictivo LL(1)
+# src/parser_ll1 — Analizador sintáctico predictivo LL(1)
 
 Implementa el **analizador sintáctico predictivo no recursivo LL(1)** de la
 Práctica 5. Consume directamente la salida del analizador léxico (`src/lexer`):
@@ -17,12 +17,25 @@ diagnósticos con posición y una traza paso a paso de la pila. No construye AST
   terminal o expande un no terminal según la celda de la tabla. Devuelve
   `ParseResult { accepted, errors, trace }`.
 - **`parser_cli.cpp`** — ejecutable `parser` para probar consultas.
+- **`examples/`** — suite de consultas SQL para pruebas y validación:
+  - `01_valida_simple.sql`: proyección `*` y tabla origen.
+  - `02_valida_compleja.sql`: proyección múltiple, `WHERE` compuesto con relacionales, `AND`/`OR`, paréntesis y aritmética.
+  - `03_error_palabra_desordenada.sql`: palabra clave fuera de orden (`WHERE` antes de `FROM`).
+  - `04_error_omision_tabla.sql`: omisión de tabla tras `FROM`.
+  - `05_error_sin_delimitador.sql`: omisión del delimitador `;`.
+  - `06_error_lexico.sql`: propagación de fallos léxicos sin colapso.
+- **`INFORME_PRACTICA5.md`** — documento formal del informe de laboratorio con especificación de la gramática, conjuntos FIRST/FOLLOW, tabla $M[A, a]$, trazas de pila y batería de pruebas.
 
 ## Uso del CLI
 
 ```sh
 # compilar
 cmake --build build --target parser
+
+# probar con los ejemplos incluidos
+./build/parser src/parser_ll1/examples/01_valida_simple.sql
+./build/parser src/parser_ll1/examples/02_valida_compleja.sql
+./build/parser src/parser_ll1/examples/03_error_palabra_desordenada.sql
 
 # aceptar/rechazar una consulta mostrando la traza de la pila
 echo "SELECT a, b FROM t WHERE a = 1 AND (b > 2 OR c <= 3);" | ./build/parser
