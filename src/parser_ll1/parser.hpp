@@ -1,7 +1,7 @@
 #pragma once
 
 #include "lexer/lexer.hpp"
-#include "parser/grammar.hpp"
+#include "parser_ll1/grammar.hpp"
 
 #include <string>
 #include <vector>

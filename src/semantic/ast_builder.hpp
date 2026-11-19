@@ -1,7 +1,7 @@
 #pragma once
 
-#include "parser/grammar.hpp"
-#include "parser/parser.hpp"
+#include "parser_ll1/grammar.hpp"
+#include "parser_ll1/parser.hpp"
 #include "semantic/ast.hpp"
 
 namespace sql {

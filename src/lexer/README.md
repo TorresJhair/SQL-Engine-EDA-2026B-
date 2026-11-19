@@ -5,34 +5,37 @@ sentencias SQL `SELECT`.
 
 ## Estructura
 
-- `include/`: modelo de tokens e interfaz del lexer.
-- `src/`: reconocimiento léxico, nombres de tokens y programa principal.
-- `tests/`: pruebas unitarias del lexer y del modelo de tokens.
+- `token.hpp` / `token.cpp`: modelo de tokens y nombres textuales.
+- `lexer.hpp` / `lexer.cpp`: escáner léxico, estados de reconocimiento y manejo de errores.
+- `lexer_cli.cpp`: programa principal del CLI léxico.
 - `examples/`: entradas SQL válidas y con errores.
+- `tests/test_lexer.cpp` / `tests/test_token.cpp`: pruebas unitarias en el directorio de tests del proyecto.
 
 ## Compilación y pruebas
 
-Se requiere `g++` con soporte para C++17 y `make`.
+El analizador léxico está integrado en `phase1_core` y se compila mediante CMake:
 
 ```bash
-make
-make test
-```
+# Configurar y compilar el CLI del lexer y las suites de prueba
+cmake -B build -S .
+cmake --build build --target lexer test_lexer test_token
 
-La compilación usa las opciones `-Wall -Wextra -Wpedantic`.
+# Ejecutar pruebas unitarias automatizadas con CTest
+ctest --test-dir build -V -R "lexer|token"
+```
 
 ## Ejecución
 
 El programa puede leer un archivo:
 
 ```bash
-./lexer examples/valida.sql
+./build/lexer src/lexer/examples/valida.sql
 ```
 
 También puede recibir la consulta por la entrada estándar:
 
 ```bash
-echo "SELECT nombre FROM estudiantes;" | ./lexer
+echo "SELECT nombre FROM estudiantes;" | ./build/lexer
 ```
 
 La salida muestra el tipo, lexema, línea y columna de cada token. Los errores
@@ -82,8 +85,8 @@ if (result.ok()) {
 - `1`: se encontraron errores léxicos.
 - `2`: uso incorrecto o no se pudo abrir el archivo indicado.
 
-Para eliminar los ejecutables generados:
+Para limpiar los binarios compilados:
 
 ```bash
-make clean
+cmake --build build --target clean
 ```

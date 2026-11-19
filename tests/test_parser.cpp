@@ -1,5 +1,5 @@
 #include "lexer/lexer.hpp"
-#include "parser/parser.hpp"
+#include "parser_ll1/parser.hpp"
 
 #include <iostream>
 #include <string>
@@ -60,6 +60,8 @@ int main() {
         "SELECT a FROM t; SELECT b FROM t;",   // tokens despues del ;
         "SELECT a FROM 123;",                  // tabla no es identificador
         "FROM t;",                             // no empieza con SELECT
+        "SELECT a WHERE a = 1 FROM t;",        // palabra clave fuera de orden (WHERE antes de FROM)
+        "SELECT *, a FROM t;",                 // combinacion invalida de '*' con columnas
     };
     for (const auto& source : invalid) {
         const auto result = parse(source);

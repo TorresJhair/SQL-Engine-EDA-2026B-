@@ -1,5 +1,5 @@
 #include "lexer/lexer.hpp"
-#include "parser/parser.hpp"
+#include "parser_ll1/parser.hpp"
 #include "semantic/ast_builder.hpp"
 
 #include <iostream>
