@@ -1,7 +1,7 @@
 # Esquema de Traducción Dirigida por la Sintaxis (SDT) y AST — Lab 6
 
-Documento de diseño del Lab 6: cómo las producciones LL(1) del Lab 5 construyen el
-**AST tipado** y qué comprueba el analizador semántico.
+Documento de diseño del Lab 6: cómo las producciones LL(1) del Lab 5 construyen el AST y
+cómo el analizador semántico lo resuelve y decora con tipos.
 
 ## 1. Construcción del AST a partir de la derivación LL(1)
 
@@ -13,58 +13,86 @@ cada producción tiene una **regla semántica** asociada. Este es el SDT: atribu
 **sintetizados** (el subárbol que devuelve cada no terminal) y **heredados** (el subárbol
 izquierdo que una cola recibe para asociar a la izquierda).
 
-### Atributos por producción (`.val` = atributo sintetizado: nodo/subárbol)
+### Atributos y reglas de traducción
 
-| Producción | Regla semántica |
-|---|---|
-| `consulta → SELECT proyeccion FROM IDENTIFIER where_opt ;` | `stmt.table = IDENTIFIER.lexeme`; `stmt.projection = proyeccion.val`; `stmt.where = where_opt.val` |
-| `proyeccion → STAR` | `select_all = true` |
-| `proyeccion → lista_cols` | `projection = lista_cols.val` |
-| `lista_cols → IDENTIFIER cols_tail` | añade `IDENTIFIER` a la lista y continúa con `cols_tail` |
-| `cols_tail → COMMA IDENTIFIER cols_tail` \| `ε` | añade columnas separadas por coma / fin de lista |
-| `where_opt → WHERE condicion` \| `ε` | `where = condicion.val` / `where = null` |
-| `condicion → disy` | `val = disy.val` |
-| `disy → conj disy_tail` | `disy_tail.her = conj.val`; `val = disy_tail.val` |
-| `disy_tail → OR conj disy_tail₁` | `disy_tail₁.her = Binary(OR, her, conj.val)`; `val = disy_tail₁.val` |
-| `disy_tail → ε` | `val = her` (atributo heredado) |
-| `conj → comp conj_tail` / `conj_tail → AND comp conj_tail \| ε` | análogo con `AND` |
-| `comp → suma comp_tail` | `comp_tail.her = suma.val`; `val = comp_tail.val` |
-| `comp_tail → op_comp suma` | `val = Binary(op_comp.op, her, suma.val)` (una sola comparación) |
-| `comp_tail → ε` | `val = her` |
-| `op_comp → = \| <> \| < \| > \| <= \| >=` | `op = token` |
-| `suma → prod suma_tail` / `suma_tail → (+\|-) prod suma_tail \| ε` | binarios `+`/`-`, asociativos a la izquierda |
-| `prod → unario prod_tail` / `prod_tail → (*\|/) unario prod_tail \| ε` | binarios `*`/`/`, asociativos a la izquierda |
-| `unario → MINUS unario` | `val = Unary(-, unario.val)` |
-| `unario → primario` | `val = primario.val` |
-| `primario → IDENTIFIER` | `val = Column(lexeme, pos)` |
-| `primario → INTEGER_LITERAL \| DECIMAL_LITERAL \| STRING_LITERAL` | `val = Literal(clase, lexeme, pos)` |
-| `primario → LPAREN condicion RPAREN` | `val = condicion.val` (los paréntesis no crean nodo) |
+La tabla especifica el SDT sobre la gramática de
+[`grammar.md`](../parser_ll1/grammar.md). Los atributos `.val` son sintetizados. `.in` es
+heredado y transporta el árbol acumulado por una cola recursiva. Los terminales token
+exponen `lexeme`, `type`, `line` y `column`.
 
-La asociatividad por la izquierda se logra pasando el subárbol ya construido como
-atributo **heredado** a la cola (`disy_tail`, `conj_tail`, `suma_tail`, `prod_tail`), que
-lo combina con el siguiente operando antes de recursar. La posición (línea/columna) de
-cada nodo se hereda del token correspondiente.
+Notación: `Item(t)` construye un `ProjItem` desde un identificador; `Column(t)` y
+`Literal(k,t)` construyen hojas; `Unary(t,x)` y `Binary(t,x,y)` construyen nodos con el
+operador y la posición del token `t`. Todos los nodos y elementos de proyección comienzan
+con tipo `Unknown`. `Projection(All)` y `Projection(List)` representan conceptualmente las
+dos formas de proyección que luego se guardan en `SelectStmt`.
+
+| Producción | Atributos | Ecuaciones semánticas |
+|---|---|---|
+| `consulta → KEYWORD_SELECT proyeccion KEYWORD_FROM IDENTIFIER where_opt SEMICOLON` | `consulta.val` sintetizado: `SelectStmt` | `consulta.val = SelectStmt(proyeccion.val, IDENTIFIER.lexeme, IDENTIFIER.line, IDENTIFIER.column, where_opt.val)` |
+| `proyeccion → STAR` | `proyeccion.val` sintetizado: `Projection` | `proyeccion.val = Projection(All)` |
+| `proyeccion → lista_cols` | `proyeccion.val` sintetizado: `Projection` | `proyeccion.val = Projection(List(lista_cols.val))` |
+| `lista_cols → IDENTIFIER cols_tail` | `lista_cols.val` sintetizado: lista de `ProjItem` | `lista_cols.val = [Item(IDENTIFIER)] ++ cols_tail.val` |
+| `cols_tail → COMMA IDENTIFIER cols_tail₁` | `cols_tail.val` sintetizado: lista de `ProjItem` | `cols_tail.val = [Item(IDENTIFIER)] ++ cols_tail₁.val` |
+| `cols_tail → ε` | `cols_tail.val` sintetizado | `cols_tail.val = []` |
+| `where_opt → KEYWORD_WHERE condicion` | `where_opt.val` sintetizado: `AstNode` opcional | `where_opt.val = condicion.val` |
+| `where_opt → ε` | `where_opt.val` sintetizado | `where_opt.val = null` |
+| `condicion → disy` | `condicion.val` sintetizado | `condicion.val = disy.val` |
+| `disy → conj disy_tail` | `disy_tail.in` heredado; `disy.val` sintetizado | `disy_tail.in = conj.val`; `disy.val = disy_tail.val` |
+| `disy_tail → KEYWORD_OR conj disy_tail₁` | `disy_tail.in` heredado; `.val` sintetizado | `disy_tail₁.in = Binary(KEYWORD_OR, disy_tail.in, conj.val)`; `disy_tail.val = disy_tail₁.val` |
+| `disy_tail → ε` | `disy_tail.in` heredado; `.val` sintetizado | `disy_tail.val = disy_tail.in` |
+| `conj → comp conj_tail` | `conj_tail.in` heredado; `conj.val` sintetizado | `conj_tail.in = comp.val`; `conj.val = conj_tail.val` |
+| `conj_tail → KEYWORD_AND comp conj_tail₁` | `conj_tail.in` heredado; `.val` sintetizado | `conj_tail₁.in = Binary(KEYWORD_AND, conj_tail.in, comp.val)`; `conj_tail.val = conj_tail₁.val` |
+| `conj_tail → ε` | `conj_tail.in` heredado; `.val` sintetizado | `conj_tail.val = conj_tail.in` |
+| `comp → suma comp_tail` | `comp_tail.in` heredado; `comp.val` sintetizado | `comp_tail.in = suma.val`; `comp.val = comp_tail.val` |
+| `comp_tail → op_comp suma` | `comp_tail.in` heredado; `.val` sintetizado | `comp_tail.val = Binary(op_comp.val, comp_tail.in, suma.val)` |
+| `comp_tail → ε` | `comp_tail.in` heredado; `.val` sintetizado | `comp_tail.val = comp_tail.in` |
+| `op_comp → EQUAL \| NOT_EQUAL \| LESS \| GREATER \| LESS_EQUAL \| GREATER_EQUAL` | `op_comp.val` sintetizado: token operador | `op_comp.val = token emparejado` |
+| `suma → prod suma_tail` | `suma_tail.in` heredado; `suma.val` sintetizado | `suma_tail.in = prod.val`; `suma.val = suma_tail.val` |
+| `suma_tail → PLUS prod suma_tail₁` | `suma_tail.in` heredado; `.val` sintetizado | `suma_tail₁.in = Binary(PLUS, suma_tail.in, prod.val)`; `suma_tail.val = suma_tail₁.val` |
+| `suma_tail → MINUS prod suma_tail₁` | `suma_tail.in` heredado; `.val` sintetizado | `suma_tail₁.in = Binary(MINUS, suma_tail.in, prod.val)`; `suma_tail.val = suma_tail₁.val` |
+| `suma_tail → ε` | `suma_tail.in` heredado; `.val` sintetizado | `suma_tail.val = suma_tail.in` |
+| `prod → unario prod_tail` | `prod_tail.in` heredado; `prod.val` sintetizado | `prod_tail.in = unario.val`; `prod.val = prod_tail.val` |
+| `prod_tail → STAR unario prod_tail₁` | `prod_tail.in` heredado; `.val` sintetizado | `prod_tail₁.in = Binary(STAR, prod_tail.in, unario.val)`; `prod_tail.val = prod_tail₁.val` |
+| `prod_tail → SLASH unario prod_tail₁` | `prod_tail.in` heredado; `.val` sintetizado | `prod_tail₁.in = Binary(SLASH, prod_tail.in, unario.val)`; `prod_tail.val = prod_tail₁.val` |
+| `prod_tail → ε` | `prod_tail.in` heredado; `.val` sintetizado | `prod_tail.val = prod_tail.in` |
+| `unario → MINUS unario` | `unario.val` sintetizado | `unario.val = Unary(MINUS, unario₁.val)` (el subíndice distingue la ocurrencia recursiva del lado derecho) |
+| `unario → primario` | `unario.val` sintetizado | `unario.val = primario.val` |
+| `primario → IDENTIFIER` | `primario.val` sintetizado | `primario.val = Column(IDENTIFIER)` |
+| `primario → INTEGER_LITERAL` | `primario.val` sintetizado | `primario.val = Literal(IntLit, INTEGER_LITERAL)` |
+| `primario → DECIMAL_LITERAL` | `primario.val` sintetizado | `primario.val = Literal(FloatLit, DECIMAL_LITERAL)` |
+| `primario → STRING_LITERAL` | `primario.val` sintetizado | `primario.val = Literal(StringLit, STRING_LITERAL)` |
+| `primario → LPAREN condicion RPAREN` | `primario.val` sintetizado | `primario.val = condicion.val` (los paréntesis no crean nodo) |
+
+En las colas, cada nueva operación envuelve el acumulador izquierdo y pasa el resultado a
+la siguiente cola. Por ejemplo, `a - b - c` se traduce como
+`Binary(MINUS, Binary(MINUS, a, b), c)`. La misma regla establece la asociatividad a la
+izquierda para `OR`, `AND`, suma y producto; la jerarquía de no terminales conserva la
+precedencia definida por la gramática. `comp_tail` no se recursa, por lo que admite una
+sola comparación.
+
+### Correspondencia con la implementación
+
+Estas ecuaciones especifican los valores semánticos de forma abstracta; no son acciones
+insertadas en las producciones del parser. El parser LL(1) guarda los identificadores de
+producción en `ParseResult::derivation` y los tokens reconocidos en `ParseResult::matched`.
+Después, `buildAst()` consume ambas secuencias en paralelo. `Builder::buildDisyTail()`,
+`buildConjTail()`, `buildSumaTail()` y `buildProdTail()` reciben el acumulador como parámetro
+y aplican las ecuaciones heredadas. Las listas de proyección se agregan directamente a
+`SelectStmt::projection`, equivalente al valor de lista descrito aquí; los tipos se
+resuelven posteriormente en `analyze()`.
 
 ## 2. Diagrama de clases del AST (`ast.hpp`)
 
-```
-SelectStmt
-  + bool select_all
-  + vector<ProjItem> projection      ProjItem { name; line; column; DataType type; bool star_expanded }
-  + string table; int table_line, table_column
-  + AstNode* where  ──────────────┐
-                                   │
-AstNode (nodo de expresión/condición, decorado)
-  + Kind kind : { Column, IntLit, FloatLit, StringLit, Unary, Binary }
-  + string lexeme          // nombre de columna o texto del literal
-  + TokenType op           // Unary: '-' ; Binary: + - * /  = <> < > <= >=  AND OR
-  + DataType type          // DECORACION: tipo inferido por el analizador
-  + int line, column
-  + AstNode* left, right
-```
+![Diagrama de clases del AST implementado en ast.hpp](figures/ast_clases.png)
 
-`DataType ∈ { Int, Float, Varchar, Boolean, Unknown }` (de `catalog.hpp`). El campo
-`type` lo rellena el analizador semántico (árbol **decorado**).
+El diagrama refleja las tres estructuras declaradas en `ast.hpp`. `SelectStmt` contiene
+cero o más elementos `ProjItem` y una raíz `AstNode` opcional para `WHERE`. Cada `AstNode`
+puede apuntar a hijos `left` y `right` mediante `std::shared_ptr`; el nodo distingue su
+forma con `AstNode::Kind` (`Column`, `IntLit`, `FloatLit`, `StringLit`, `Unary` o `Binary`).
+Los tipos de `ProjItem` y `AstNode` comienzan como `DataType::Unknown` y el analizador
+semántico los actualiza al decorar el árbol. `TokenType op` guarda el operador cuando el
+nodo es unario o binario. Las posiciones se almacenan como línea y columna en cada
+proyección, en la tabla de `SelectStmt` y en cada nodo.
 
 ## 3. Reglas semánticas (verificación)
 

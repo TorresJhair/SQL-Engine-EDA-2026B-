@@ -1,0 +1,58 @@
+digraph AstClasses {
+    graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.55", ranksep="0.65",
+           fontname="DejaVu Sans", label="Diagrama de clases del AST (ast.hpp)", labelloc=t,
+           fontsize=20, splines=polyline];
+    node [shape=plain, fontname="DejaVu Sans", fontsize=11];
+    edge [fontname="DejaVu Sans", fontsize=10, color="#536579", arrowsize=0.8];
+
+    stmt [label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="7">
+        <TR><TD BGCOLOR="#e8f1fb"><B>SelectStmt</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ bool select_all</TD></TR>
+        <TR><TD ALIGN="LEFT">+ vector&lt;ProjItem&gt; projection</TD></TR>
+        <TR><TD ALIGN="LEFT">+ string table</TD></TR>
+        <TR><TD ALIGN="LEFT">+ int table_line, table_column</TD></TR>
+        <TR><TD ALIGN="LEFT">+ shared_ptr&lt;AstNode&gt; where</TD></TR>
+      </TABLE>>];
+
+    proj [label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="7">
+        <TR><TD BGCOLOR="#edf7f2"><B>ProjItem</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ string name</TD></TR>
+        <TR><TD ALIGN="LEFT">+ int line, column</TD></TR>
+        <TR><TD ALIGN="LEFT">+ DataType type = Unknown</TD></TR>
+        <TR><TD ALIGN="LEFT">+ bool star_expanded</TD></TR>
+      </TABLE>>];
+
+    ast [label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="7">
+        <TR><TD BGCOLOR="#f3effb"><B>AstNode</B></TD></TR>
+        <TR><TD ALIGN="LEFT">+ Kind kind</TD></TR>
+        <TR><TD ALIGN="LEFT">+ string lexeme</TD></TR>
+        <TR><TD ALIGN="LEFT">+ TokenType op</TD></TR>
+        <TR><TD ALIGN="LEFT">+ DataType type = Unknown</TD></TR>
+        <TR><TD ALIGN="LEFT">+ int line, column</TD></TR>
+        <TR><TD ALIGN="LEFT">+ shared_ptr&lt;AstNode&gt; left, right</TD></TR>
+      </TABLE>>];
+
+    kind [label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="7">
+        <TR><TD BGCOLOR="#fff4d6"><B>AstNode::Kind</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Column · IntLit · FloatLit</TD></TR>
+        <TR><TD ALIGN="LEFT">StringLit · Unary · Binary</TD></TR>
+      </TABLE>>];
+
+    datatype [label=<
+      <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="7">
+        <TR><TD BGCOLOR="#fff4d6"><B>DataType</B></TD></TR>
+        <TR><TD ALIGN="LEFT">Int · Float · Varchar</TD></TR>
+        <TR><TD ALIGN="LEFT">Boolean · Unknown</TD></TR>
+      </TABLE>>];
+
+    stmt -> proj [dir=both, arrowtail=odiamond, arrowhead=none, label="projection · 0..*", taillabel="1"];
+    stmt -> ast [dir=both, arrowtail=odiamond, arrowhead=none, label="where · 0..1", taillabel="1"];
+    ast -> ast [dir=both, arrowtail=odiamond, arrowhead=none, label="left / right · 0..1"];
+    ast -> kind [style=dashed, arrowhead=vee];
+    stmt -> datatype [style=dashed, arrowhead=vee];
+    ast -> datatype [style=dashed, arrowhead=vee];
+}

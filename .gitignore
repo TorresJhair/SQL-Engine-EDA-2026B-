@@ -9,6 +9,11 @@ salidas/
 *.png
 *.svg
 *.pdf
+# Informe PDF de la Práctica 6: debe incluirse en el repositorio.
+!src/semantic/LAB_06_Analizador_Semantico_AST_EDA.pdf
+# Diagramas fuente y PNG del informe semántico, referenciados desde Markdown.
+!src/semantic/figures/*.dot
+!src/semantic/figures/*.png
 # Salidas del benchmark: el CSV de --csv y el PNG que dibuja scripts/plot_benchmark.py
 *.csv
 # ...pero el catalogo de esquema del analizador semantico SI es codigo fuente.
