@@ -1,0 +1,101 @@
+digraph Arquitectura {
+    graph [
+        rankdir=TB,
+        bgcolor="#ffffff",
+        pad="0.28",
+        nodesep="0.34",
+        ranksep="0.48",
+        splines=polyline,
+        fontname="DejaVu Sans",
+        fontsize=19,
+        labelloc=t,
+        label="Flujo del analizador semántico"
+    ];
+    node [
+        shape=box,
+        style="rounded,filled",
+        fontname="DejaVu Sans",
+        fontsize=10,
+        margin="0.16,0.10",
+        color="#526579",
+        penwidth=1.25
+    ];
+    edge [
+        fontname="DejaVu Sans",
+        fontsize=9,
+        color="#526579",
+        fontcolor="#34465a",
+        arrowsize=0.75,
+        penwidth=1.15
+    ];
+
+    sql [label="Consulta SQL\narchivo o entrada estándar", fillcolor="#e8f1fb", color="#356a9a"];
+
+    subgraph cluster_frontend {
+        label="Análisis léxico y sintáctico";
+        fontname="DejaVu Sans";
+        fontsize=12;
+        style="rounded,filled";
+        color="#b9cde0";
+        fillcolor="#f7faff";
+
+        lexer [label="Lexer\nLexer::tokenize", fillcolor="#edf7f2", color="#3d8061"];
+        lexresult [label="LexResult\ntokens, lexemas y posiciones", fillcolor="#f3effb", color="#7556a5"];
+        lexok [label="¿Sin errores\nléxicos?", shape=diamond, style=filled, fillcolor="#fff4d6", color="#b17a00"];
+        lexerr [label="Diagnósticos léxicos\nConsulta rechazada", shape=octagon, fillcolor="#fdeaea", color="#b44848"];
+        parser [label="Parser LL(1)\nGrammar + pila predictiva", fillcolor="#edf7f2", color="#3d8061"];
+        parseresult [label="ParseResult\nderivation + matched", fillcolor="#f3effb", color="#7556a5"];
+        parseok [label="¿Sintaxis\naceptada?", shape=diamond, style=filled, fillcolor="#fff4d6", color="#b17a00"];
+        parseerr [label="Diagnósticos sintácticos\nConsulta rechazada", shape=octagon, fillcolor="#fdeaea", color="#b44848"];
+
+        lexer -> lexresult -> lexok;
+        lexok -> lexerr [label="No", color="#b44848", fontcolor="#8b3030"];
+        lexok -> parser [label="Sí", color="#3d8061", fontcolor="#2b684d"];
+        parser -> parseresult -> parseok;
+        parseok -> parseerr [label="No", color="#b44848", fontcolor="#8b3030"];
+    }
+
+    subgraph cluster_semantic {
+        label="Construcción y análisis semántico";
+        fontname="DejaVu Sans";
+        fontsize=12;
+        style="rounded,filled";
+        color="#b8d4c5";
+        fillcolor="#f7fcf9";
+
+        builder [label="Constructor SDT\nbuildAst", fillcolor="#edf7f2", color="#3d8061"];
+        ast [label="AST inicial\nSelectStmt + AstNode\ntipos Unknown; posiciones conservadas", fillcolor="#f3effb", color="#7556a5"];
+        analyze [label="Verificador semántico\nanalyze", fillcolor="#edf7f2", color="#3d8061"];
+        semresult [label="SemResult\nAST decorado + diagnósticos + ok", fillcolor="#f3effb", color="#7556a5"];
+        semok [label="¿Sin errores\nsemánticos?", shape=diamond, style=filled, fillcolor="#fff4d6", color="#b17a00"];
+        printast [label="Impresión\nprintDecoratedAst", fillcolor="#edf7f2", color="#3d8061"];
+        accepted [label="Consulta aceptada\nAST decorado en consola", shape=note, fillcolor="#e8f1fb", color="#356a9a"];
+        semerr [label="Consulta rechazada\nErrores semánticos en consola", shape=octagon, fillcolor="#fdeaea", color="#b44848"];
+
+        builder -> ast -> analyze -> semresult -> semok;
+        semok -> printast [label="Sí; puede haber advertencias", color="#3d8061", fontcolor="#2b684d"];
+        printast -> accepted;
+        semok -> semerr [label="No", color="#b44848", fontcolor="#8b3030"];
+    }
+
+    subgraph cluster_catalog {
+        label="Catálogo de metadatos";
+        fontname="DejaVu Sans";
+        fontsize=12;
+        style="rounded,filled";
+        color="#d5c8e6";
+        fillcolor="#fbf9fe";
+
+        csv [label="schema.csv", shape=note, fillcolor="#e8f1fb", color="#356a9a"];
+        loadcsv [label="loadCsv", fillcolor="#edf7f2", color="#3d8061"];
+        defaultschema [label="defaultSchema\nesquema en memoria", fillcolor="#e8f1fb", color="#356a9a"];
+        catalog [label="Catalog\ntablas, columnas, ordinales y tipos", fillcolor="#f3effb", color="#7556a5"];
+
+        csv -> loadcsv -> catalog;
+        defaultschema -> catalog;
+    }
+
+    sql -> lexer;
+    parseok -> builder [label="Sí", color="#3d8061", fontcolor="#2b684d"];
+    catalog -> analyze [label="esquema", color="#7556a5", fontcolor="#604587"];
+}

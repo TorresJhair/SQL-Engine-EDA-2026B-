@@ -1,0 +1,42 @@
+digraph AST {
+    graph [
+        rankdir=LR,
+        bgcolor="#ffffff",
+        pad="0.28",
+        nodesep="0.55",
+        ranksep="0.75",
+        splines=polyline,
+        fontname="DejaVu Sans",
+        fontsize=19,
+        labelloc=t,
+        label="Estructura del AST semántico"
+    ];
+    node [
+        shape=record,
+        style=filled,
+        fontname="DejaVu Sans",
+        fontsize=10,
+        margin="0.16,0.10",
+        color="#7556a5",
+        fillcolor="#f3effb",
+        penwidth=1.25
+    ];
+    edge [
+        fontname="DejaVu Sans",
+        fontsize=9,
+        color="#526579",
+        fontcolor="#34465a",
+        arrowsize=0.75,
+        penwidth=1.2
+    ];
+
+    select [label="{SelectStmt|select_all: bool\lprojection: vector de ProjItem\ltable: string\ltable_line, table_column: int\lwhere: shared_ptr de AstNode\l}", color="#356a9a", fillcolor="#e8f1fb"];
+    projection [label="{ProjItem|name: string\lline, column: int\ltype: DataType\lstar_expanded: bool\l}", color="#3d8061", fillcolor="#edf7f2"];
+    ast [label="{AstNode|kind: Kind\llexeme: string\lop: TokenType\ltype: DataType\lline, column: int\lleft, right: shared_ptr de AstNode\l}", color="#7556a5", fillcolor="#f3effb"];
+    kinds [label="{Kind|Column\lIntLit · FloatLit · StringLit\lUnary · Binary\l}", shape=note, color="#b17a00", fillcolor="#fff4d6"];
+
+    select -> projection [label="proyección · 0..*", color="#356a9a"];
+    select -> ast [label="WHERE · 0..1", color="#356a9a"];
+    ast -> ast [label="hijos left / right", color="#7556a5"];
+    ast -> kinds [label="discriminador", style=dashed, color="#b17a00", fontcolor="#8b6300"];
+}

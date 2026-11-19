@@ -1,0 +1,31 @@
+digraph SDT {
+    graph [rankdir=TB, bgcolor="white", pad="0.3", nodesep="0.55", ranksep="0.8",
+           fontname="DejaVu Sans", label="Construcción del AST mediante SDT", labelloc=t,
+           fontsize=20, splines=polyline];
+    node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=11,
+          margin="0.18,0.12", color="#536579", fillcolor="#f5f7fa"];
+    edge [fontname="DejaVu Sans", fontsize=10, color="#536579", arrowsize=0.8];
+
+    parse [label="Parser LL(1)\nParseResult\nderivation + matched", fillcolor="#e8f1fb", color="#356a9a"];
+    builder [label="Builder / buildAst()\nrecorre producciones y tokens\nen paralelo", fillcolor="#edf7f2", color="#3d8061"];
+    attrs [label="Atributos SDT\nSintetizados: listas y subárboles\nHeredados: acumulador izquierdo\nPosiciones: línea y columna", fillcolor="#fff4d6", color="#b17a00"];
+    ast [label="AST inicial\nSelectStmt + ProjItem + AstNode\ntipos Unknown", fillcolor="#f3effb", color="#7556a5"];
+    analyze [label="analyze(AST, Catalog)\nresuelve nombres e infiere tipos", fillcolor="#edf7f2", color="#3d8061"];
+    decorated [label="AST decorado\nproyección expandida y tipos\ninferidos", fillcolor="#e8f1fb", color="#356a9a"];
+
+    // Fila superior: entrada del parser y evaluación de las acciones SDT.
+    { rank=same; parse; builder; attrs; }
+    parse -> builder [label="derivación + tokens"];
+    builder -> attrs [label="aplica reglas"];
+    parse -> builder [style=invis, weight=100];
+    builder -> attrs [style=invis, weight=100];
+
+    // Fila inferior en sentido inverso para formar un flujo serpenteante:
+    // la flecha baja desde atributos hacia el AST y continúa hacia la izquierda.
+    { rank=same; decorated; analyze; ast; }
+    attrs -> ast [label="val sintetizado"];
+    ast -> analyze [label="AST inicial", constraint=false];
+    analyze -> decorated [label="tipos resueltos", constraint=false];
+    decorated -> analyze [style=invis, weight=100];
+    analyze -> ast [style=invis, weight=100];
+}

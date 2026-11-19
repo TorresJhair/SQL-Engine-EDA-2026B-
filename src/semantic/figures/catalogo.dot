@@ -1,0 +1,28 @@
+digraph Catalogo {
+    graph [rankdir=LR, bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.75",
+           fontname="DejaVu Sans", label="Construcción y consulta del catálogo (tabla de símbolos)",
+           labelloc=t, fontsize=19, splines=polyline];
+    node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=10,
+          margin="0.16,0.11", color="#536579", fillcolor="#f5f7fa"];
+    edge [fontname="DejaVu Sans", fontsize=9, color="#536579", arrowsize=0.8];
+
+    memory [label="Esquema predeterminado\ndefaultSchema()\n3 tablas definidas en código",
+            fillcolor="#fff4d6", color="#b17a00"];
+    csv [label="CSV opcional\n--schema <ruta>\nloadCsv()", shape=note,
+         fillcolor="#e8f1fb", color="#356a9a"];
+    add [label="Catalog::addColumn()\nregistra cada columna\ny asigna ordinal", fillcolor="#edf7f2", color="#3d8061"];
+
+    catalog [label="Catalog\ntables_\nunordered_map<table, Table>",
+             fillcolor="#f3effb", color="#7556a5"];
+    table [label="Table\nname\ncolumns: vector<Column> en orden ordinal\nColumn: name · ordinal · DataType · pk\nby_name: unordered_map<nombre, ordinal>",
+           fillcolor="#f3effb", color="#7556a5"];
+
+    analyzer [label="Analizador semántico\nresuelve FROM / SELECT / WHERE\ny expande * por ordinal",
+              fillcolor="#edf7f2", color="#3d8061"];
+
+    memory -> add [label="sin --schema"];
+    csv -> add [label="con --schema"];
+    add -> catalog;
+    catalog -> table [label="Catalog::find(tabla)\nO(1) promedio"];
+    table -> analyzer [label="Table::find(columna)\nO(1) promedio · devuelve tipo y ordinal"];
+}
