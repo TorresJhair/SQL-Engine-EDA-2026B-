@@ -28,6 +28,10 @@ struct ParseResult {
     bool accepted = false;
     std::vector<ParseDiagnostic> errors;
     std::vector<ParseStep> trace;
+    // Derivacion por la izquierda: ids de produccion aplicados, en orden, y los tokens
+    // emparejados, en orden. Alimentan la construccion del AST (SDT) en el Lab 6.
+    std::vector<int> derivation;
+    std::vector<Token> matched;
     bool ok() const { return accepted && errors.empty(); }
 };
 

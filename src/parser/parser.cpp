@@ -83,6 +83,7 @@ ParseResult Parser::parse() {
             if (top.terminal == tok.type) {
                 result.trace.push_back({renderStack(), renderInput(),
                                         "emparejar " + Grammar::symbolName(top)});
+                result.matched.push_back(tok);  // SDT: token emparejado, en orden
                 stack.pop_back();
                 ++pos;
             } else {
@@ -106,6 +107,7 @@ ParseResult Parser::parse() {
             result.trace.push_back({renderStack(), renderInput(),
                                     "expandir (" + std::to_string(id + 1) + ") " +
                                         Grammar::productionString(prod)});
+            result.derivation.push_back(id);  // SDT: produccion aplicada, en orden
             stack.pop_back();
             for (auto it = prod.rhs.rbegin(); it != prod.rhs.rend(); ++it) {
                 stack.push_back(*it);  // empuja el rhs en orden inverso
