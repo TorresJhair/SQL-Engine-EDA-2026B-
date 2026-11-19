@@ -26,6 +26,7 @@ add_library(phase1_core STATIC
   src/bench/Metrics.cpp  src/bench/DataGen.cpp      src/bench/Benchmark.cpp
   src/lexer/token.cpp    src/lexer/lexer.cpp
   src/parser/grammar.cpp src/parser/parser.cpp
+  src/semantic/catalog.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
@@ -65,6 +66,8 @@ add_executable(test_token tests/test_token.cpp)
 target_link_libraries(test_token PRIVATE phase1_core)
 add_executable(test_parser tests/test_parser.cpp)
 target_link_libraries(test_parser PRIVATE phase1_core)
+add_executable(test_catalog tests/test_catalog.cpp)
+target_link_libraries(test_catalog PRIVATE phase1_core)
 
 target_include_directories(phase1_core PUBLIC src)
 target_include_directories(tests   PRIVATE tests)
@@ -83,3 +86,4 @@ add_test(NAME invariants    COMMAND tests --suite invariants)
 add_test(NAME lexer         COMMAND test_lexer)
 add_test(NAME token         COMMAND test_token)
 add_test(NAME parser        COMMAND test_parser)
+add_test(NAME catalog       COMMAND test_catalog)

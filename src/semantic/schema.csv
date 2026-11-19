@@ -1,0 +1,14 @@
+# Catalogo de prueba (Tabla de Simbolos) - Lab 6
+# formato: tabla,columna,tipo[,pk]   tipos: INT FLOAT VARCHAR BOOLEAN
+estudiantes,id,INT,pk
+estudiantes,nombre,VARCHAR
+estudiantes,edad,INT
+estudiantes,promedio,FLOAT
+estudiantes,activo,BOOLEAN
+cursos,id,INT,pk
+cursos,titulo,VARCHAR
+cursos,creditos,INT
+matriculas,id,INT,pk
+matriculas,estudiante_id,INT
+matriculas,curso_id,INT
+matriculas,nota,FLOAT
