@@ -45,6 +45,12 @@ target_link_libraries(lexer PRIVATE phase1_core)
 add_executable(parser src/parser/parser_cli.cpp)
 target_link_libraries(parser PRIVATE phase1_core)
 
+# CLI del analizador semantico (Practica 6): lee una consulta SQL, la valida contra el
+# catalogo y, si es valida, imprime el AST decorado con tipos. --schema carga el catalogo
+# desde CSV. Trae su propio main(), por eso NO entra en phase1_core.
+add_executable(semantic src/semantic/semantic_cli.cpp)
+target_link_libraries(semantic PRIVATE phase1_core)
+
 add_executable(tests
   tests/test_main.cpp
   tests/test_value.cpp tests/test_tuple.cpp
