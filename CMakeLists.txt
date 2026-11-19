@@ -26,6 +26,7 @@ add_library(phase1_core STATIC
   src/bench/Metrics.cpp  src/bench/DataGen.cpp      src/bench/Benchmark.cpp
   src/lexer/token.cpp    src/lexer/lexer.cpp
   src/parser_ll1/grammar.cpp src/parser_ll1/parser.cpp
+  src/semantic/catalog.cpp src/semantic/ast_builder.cpp src/semantic/semantic.cpp
 )
 # Fuentes explicitas. NUNCA GLOB: anadir un archivo despues genera conflictos.
 
@@ -43,6 +44,12 @@ target_link_libraries(lexer PRIVATE phase1_core)
 # main(), por eso NO entra en phase1_core.
 add_executable(parser src/parser_ll1/parser_cli.cpp)
 target_link_libraries(parser PRIVATE phase1_core)
+
+# CLI del analizador semantico (Practica 6): lee una consulta SQL, la valida contra el
+# catalogo y, si es valida, imprime el AST decorado con tipos. --schema carga el catalogo
+# desde CSV. Trae su propio main(), por eso NO entra en phase1_core.
+add_executable(semantic src/semantic/semantic_cli.cpp)
+target_link_libraries(semantic PRIVATE phase1_core)
 
 add_executable(tests
   tests/test_main.cpp
@@ -65,6 +72,12 @@ add_executable(test_token tests/test_token.cpp)
 target_link_libraries(test_token PRIVATE phase1_core)
 add_executable(test_parser tests/test_parser.cpp)
 target_link_libraries(test_parser PRIVATE phase1_core)
+add_executable(test_catalog tests/test_catalog.cpp)
+target_link_libraries(test_catalog PRIVATE phase1_core)
+add_executable(test_ast tests/test_ast.cpp)
+target_link_libraries(test_ast PRIVATE phase1_core)
+add_executable(test_semantic tests/test_semantic.cpp)
+target_link_libraries(test_semantic PRIVATE phase1_core)
 
 target_include_directories(phase1_core PUBLIC src)
 target_include_directories(tests   PRIVATE tests)
@@ -83,3 +96,6 @@ add_test(NAME invariants    COMMAND tests --suite invariants)
 add_test(NAME lexer         COMMAND test_lexer)
 add_test(NAME token         COMMAND test_token)
 add_test(NAME parser        COMMAND test_parser)
+add_test(NAME catalog       COMMAND test_catalog)
+add_test(NAME ast           COMMAND test_ast)
+add_test(NAME semantic      COMMAND test_semantic)
